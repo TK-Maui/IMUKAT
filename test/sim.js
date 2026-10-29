@@ -3,7 +3,7 @@ const E = require("../engine.js");
 const N = +(process.argv[2] || 300);
 let seed = 12345; const rand = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
 const pick = a => a[Math.floor(rand() * a.length)];
-const stats = { t1prints: 0, nullk: 0, games: 0, rounds: 0, errors: 0, esc: { heli: 0, disguise: 0, wire: 0 }, cap: 0, fail: 0, turnsSum: 0, alarms: 0, stolen: 0, detMoney: 0, thMoney: 0, leaks: 0, backOpen: 0, stuck: 0 };
+const stats = { inspects: 0, t1prints: 0, nullk: 0, games: 0, rounds: 0, errors: 0, esc: { heli: 0, disguise: 0, wire: 0 }, cap: 0, fail: 0, turnsSum: 0, alarms: 0, stolen: 0, detMoney: 0, thMoney: 0, leaks: 0, backOpen: 0, stuck: 0 };
 function act(g, pid, a) { const e = E.safeApply(g, pid, a); if (e && e.startsWith("内部エラー")) { stats.errors++; console.log("ERR", e, JSON.stringify(a)); } return e; }
 function bfsTo(g, from, n, goals) { const r = E.reach(g, from, n); const hit = r.filter(k => goals.includes(k)); if (hit.length) return pick(hit); // 近づく
   if (!goals.length) return pick(r); let best = r[0], bd = 1e9; for (const k of r) for (const gk of goals) { const d = E.dist(k, gk) + (E.FL(k) !== E.FL(gk) ? 6 : 0); if (d < bd) { bd = d; best = k; } } return rand() < 0.8 ? best : pick(r); }
@@ -21,7 +21,7 @@ for (let gi = 0; gi < N; gi++) {
       act(g, "P1", { kind: "nextRound" }); continue; }
     // 情報漏れチェック：探偵の画面に怪盗の位置がないこと、怪盗の画面に探偵の位置がないこと
     if (g.phase === "play") {
-      const dv = E.viewFor(g, g.detId); if (dv.thieves || dv.tr.some(t => t.stage != null)) stats.leaks++;
+      const dv = E.viewFor(g, g.detId); if (dv.thieves || dv.tr.some(t => t.stage != null || t.taken) || dv.parts.some(x => x.taken) || dv.log.some(l => /盗まれました|なくなりました/.test(l.m))) stats.leaks++;
       const tid = g.players.find(p => p.th).id; const tv = E.viewFor(g, tid); if (tv.det) stats.leaks++;
     }
     if (g.phase === "play" && g.turn === 1 && g.stage === "det" && g.prints.some(x => !x.fake)) stats.t1prints++;
@@ -68,6 +68,7 @@ for (let gi = 0; gi < N; gi++) {
     }
   }
   if (guard >= 5000) { stats.stuck++; console.log("GUARD", g.phase, g.stage); }
+  stats.inspects += g.alog.filter(a => a.kind === "調査").length;
   stats.games++;
   g.players.forEach(p => { if (!Number.isFinite(p.money) || p.money < 0 || p.debt < 0) console.log("BAD MONEY", p); });
   if ((g.errors || []).length) { stats.errors += g.errors.length; console.log(g.errors[0]); }

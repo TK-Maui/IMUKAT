@@ -5,7 +5,7 @@
 (function (root) {
 "use strict";
 const E = {};
-E.VERSION = "テスト版 v1.1";
+E.VERSION = "テスト版 v1.2";
 
 /* ---------- 乱数（ゲームごとの種から作る。同じ種＋同じ操作なら同じ結果） ---------- */
 let RNG = null;
@@ -190,7 +190,7 @@ function startRound(g) {
   let ni = 0;
   g.players.forEach(p => {
     if (p.id === g.detId) {
-      p.det = { k: null, skills: [], cd: {}, ready: false, ambush: null, captured: [], capN: 0, sprint: 0, net: false, blackout: false, secured: [], info: [] };
+      p.det = { k: null, skills: [], cd: {}, ready: false, ambush: null, captured: [], capN: 0, sprint: 0, net: false, blackout: false, secured: [], info: [], known: { tr: {}, parts: {} } };
     } else {
       p.th = { k: null, status: "active", loot: [], parts: {}, items: g.opt.items ? [deck.pop(), deck.pop()].filter(Boolean) : [], notice: notices[ni++ % notices.length], declared: null,
         heliCall: null, escTurn: null, escHow: null, escK: null, rescues: 0, alarmTrig: false, rel: 0, relNeed: 2, relBy: [], pendingRecv: null, tp: null, stats: { moves: 0, stays: 0, unlockTry: 0, unlockOk: 0, fails: 0, timeouts: 0, items: 0 } };
@@ -403,7 +403,7 @@ function resolveThieves(g) {
   for (const p of ts) {
     const th = p.th; if (th.status !== "active" || !th.tp.pick) continue;
     const pt = g.parts.find(x => !x.taken && x.k === th.k);
-    if (pt) { pt.taken = true; th.parts[pt.type] = (th.parts[pt.type] || 0) + 1; log(g, "all", `${nm(pt.k)} の変装パーツがなくなりました`); log(g, "th", `${p.name}が「${PARTS[pt.type]}」を拾いました`); alog(g, p.id, "変装パーツを拾う", { detail: PARTS[pt.type], to: nm(th.k) }); }
+    if (pt) { pt.taken = true; th.parts[pt.type] = (th.parts[pt.type] || 0) + 1; log(g, "th", `${p.name}が「${PARTS[pt.type]}」を拾いました`); alog(g, p.id, "変装パーツを拾う", { detail: PARTS[pt.type], to: nm(th.k) }); }
   }
   // 鉢合わせ
   for (const p of ts) if (p.th.status === "active" && d.k === p.th.k) capture(g, p, "meet", d.k);
@@ -415,7 +415,7 @@ function resolveThieves(g) {
       const roll = d6(); const tgt = tr.target - (tp.use.key ? 1 : 0); th.stats.unlockTry++;
       if (roll >= tgt) {
         tr.stage++; th.stats.unlockOk++;
-        if (tr.stage >= tr.need) { tr.taken = true; tr.holder = p.id; th.loot.push(tr.id); log(g, "all", `${nm(tr.k)} の財宝「${tr.name}」が盗まれました`); log(g, "th", `${p.name}が「${tr.name}」を手に入れました`); }
+        if (tr.stage >= tr.need) { tr.taken = true; tr.holder = p.id; th.loot.push(tr.id); log(g, "th", `${p.name}が「${tr.name}」を手に入れました`); }
         else log(g, "th", `${p.name}：「${tr.name}」のセキュリティを1段階解除（${tr.stage}/${tr.need}）`);
         alog(g, p.id, "解除", { dice: roll, detail: `${tr.name}（${tgt}以上で成功）`, to: nm(th.k), result: tr.taken ? "入手" : "1段階成功" });
       } else {
@@ -460,6 +460,25 @@ function resolveThieves(g) {
   startDetTurn(g);
 }
 
+/* ---------- 探偵の調査：財宝・変装パーツのマスに止まると、そこの今の状況が分かる ---------- */
+function inspect(g, p) {
+  const d = p.det; const k = d.k; if (k == null) return;
+  d.known = d.known || { tr: {}, parts: {} };
+  const tr = g.tr.find(t => t.k === k);
+  if (tr) {
+    d.known.tr[tr.id] = { taken: tr.taken, stage: tr.stage, need: tr.need, fails: tr.fails, t: g.turn };
+    const m = tr.taken ? `調査：${nm(k)}「${tr.name}」は すでに盗まれていた` : `調査：${nm(k)}「${tr.name}」はまだある（解除 ${tr.stage}/${tr.need}段階・失敗${tr.fails}回）`;
+    d.info.push({ r: g.round, t: g.turn, m }); log(g, "det", m); alog(g, p.id, "調査", { to: nm(k), result: m });
+  }
+  const pt = g.parts.find(x => x.k === k);
+  if (pt) {
+    d.known.parts[pt.id] = { taken: pt.taken, t: g.turn };
+    const m = `調査：${nm(k)} の変装パーツ「${PARTS[pt.type]}」は ${pt.taken ? "なくなっていた" : "まだある"}`;
+    d.info.push({ r: g.round, t: g.turn, m }); log(g, "det", m); alog(g, p.id, "調査", { to: nm(k), result: m });
+  }
+}
+E.inspect = inspect;
+
 /* ---------- 探偵の操作 ---------- */
 function detAct(g, p, a) {
   const d = p.det;
@@ -491,7 +510,7 @@ function detAct(g, p, a) {
       targets = [base];
       if (d.net) neighbors(g, base).filter(k => FL(k) === FL(base)).forEach(k => targets.push(k));
     }
-    const from = d.k; d.k = tp.dest;
+    const from = d.k; d.k = tp.dest; inspect(g, p);
     alog(g, p.id, "移動", { from: nm(from), to: nm(d.k), dice: tp.die || "", detail: `${g.step}回目${tp.stay ? "・留まる" : ""}`, result: act });
     // オイル
     const oi = g.oils.findIndex(o => o.k === d.k);
@@ -550,7 +569,9 @@ function useSkill(g, p, a) {
   } else if (a.id === "jump") {
     if (d.tp.roll != null || d.tp.stay) return "階段跳びは、サイコロを振る前に使います"; const from = d.k; d.k = otherFloor(d.k); msg = `階段跳び：${nm(from)} → ${nm(d.k)}`;
   } else if (a.id === "secure") {
-    const tr = g.tr.find(t => !t.taken && t.k === d.k); if (!tr) return "財宝のマスにいるときだけ使えます";
+    const tr0 = g.tr.find(t => t.k === d.k); if (!tr0) return "財宝のマスにいるときだけ使えます";
+    if (tr0.taken) { inspect(g, p); return "この財宝はもう盗まれていました"; }
+    const tr = tr0;
     if (tr.secured) return "この財宝にはもう使っています";
     tr.secured = true; tr.need++; msg = `セキュリティ強化：「${tr.name}」の解除段階が${tr.need}段階になりました`;
     log(g, "all", `探偵が ${nm(d.k)} の「${tr.name}」のセキュリティを強化しました`); g.reveals.push({ r: g.round, t: g.turn, k: d.k, text: `探偵は ${nm(d.k)} にいた（セキュリティ強化）` });
@@ -580,7 +601,7 @@ function setupAct(g, p, a) {
     if (bld(g).starts.includes(k)) return "怪盗のスタート候補（窓）のマスは選べません";
     let sk = [];
     if (g.opt.skills) { sk = [...new Set(a.skills || [])].filter(x => SKILLS[x]); if (sk.length !== 4) return "スキルを4つ選んでください"; }
-    p.det.k = k; p.det.skills = sk; p.det.ready = true;
+    p.det.k = k; p.det.skills = sk; p.det.ready = true; inspect(g, p);
     log(g, "all", "探偵の準備ができました");
     alog(g, p.id, "探偵の準備", { to: nm(k), detail: sk.map(x => SKILLS[x].name).join("・") });
   } else if (a.kind === "declare") {
@@ -721,6 +742,7 @@ function viewFor(g, pid) {
   const me = P(g, pid);
   const role = me ? (me.det ? "det" : me.th ? "thief" : null) : null;
   const reveal = g.phase === "roundEnd" || g.phase === "end";
+  const dp0 = g.detId ? P(g, g.detId) : null; const known = role === "det" && dp0 && dp0.det ? dp0.det.known || { tr: {}, parts: {} } : null;
   const isTh = role === "thief" || reveal, isDet = role === "det" || reveal;
   const v = {
     v: g.v, gid: g.gid, phase: g.phase, round: g.round, rounds: g.rounds, turn: g.turn, stage: g.stage, step: g.step, opt: g.opt, undos: g.undos,
@@ -730,9 +752,10 @@ function viewFor(g, pid) {
       notice: p.th && (p.th.declared || reveal || p.id === pid) ? p.th.notice : null, noticeOK: p.th && reveal ? !!p.th.noticeOK : null,
       capK: p.th && p.th.status === "captured" ? p.th.k : null, rel: p.th && p.th.status === "captured" ? p.th.rel : null, relNeed: p.th ? p.th.relNeed : null,
       itemCount: p.th ? p.th.items.length : null })),
-    tr: (g.tr || []).map(t => ({ id: t.id, rank: t.rank, name: t.name, value: t.value, k: t.k, taken: t.taken, alarm: t.alarm, secured: t.secured,
-      stage: isTh ? t.stage : null, need: isTh ? t.need : null, fails: isTh ? t.fails : null, target: t.target, holder: isTh ? t.holder : null })),
-    parts: (g.parts || []).map(x => ({ type: x.type, k: x.k, taken: x.taken })),
+    tr: (g.tr || []).map(t => ({ id: t.id, rank: t.rank, name: t.name, value: t.value, k: t.k, taken: isTh ? t.taken : false, alarm: t.alarm, secured: t.secured,
+      stage: isTh ? t.stage : null, need: isTh ? t.need : null, fails: isTh ? t.fails : null, target: t.target, holder: isTh ? t.holder : null,
+      seen: !isTh && known ? known.tr[t.id] || null : null })),
+    parts: (g.parts || []).map(x => ({ id: x.id, type: x.type, k: x.k, taken: isTh ? x.taken : false, seen: !isTh && known ? known.parts[x.id] || null : null })),
     prints: (g.prints || []).map(x => ({ pid: x.pid, k: x.k, age: x.age, fake: isTh ? !!x.fake : false })),
     backOpen: g.backOpen, blocks: blockedStairs(g), reveals: g.reveals || [], searchMarks: (g.searchMarks || []).filter(m => m.t >= g.turn - 1),
     floorHint: isTh ? g.floorHint : null, oils: isTh ? g.oils : [], records: g.records, errorsN: (g.errors || []).length,

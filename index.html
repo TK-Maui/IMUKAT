@@ -59,6 +59,9 @@ td.n,th.n{text-align:right}
 @keyframes blink{50%{opacity:.4}}
 @media (prefers-reduced-motion: reduce){.cell .tr.alarm{animation:none}}
 .cell .pt{position:absolute;right:2px;top:1px;font-size:10px;font-weight:800;color:var(--part)}
+.cell .tr.gone{opacity:.35;border-style:dashed}
+.cell .pt.gone{opacity:.35;text-decoration:line-through}
+.cell .seen{position:absolute;left:2px;top:12px;font-size:9px;font-weight:700;color:var(--ok)}
 .cell .fp{position:absolute;bottom:3px;left:3px;display:flex;gap:1px;flex-wrap:wrap;max-width:70%}
 .cell .fp i{width:8px;height:8px;border-radius:50%;display:block;background:var(--pc)}
 .cell .fp i.old{opacity:.35}
@@ -574,8 +577,8 @@ function mapHTML(v,o){
       const cls=["cell"];if(q)cls.push("q1");if(fixed[k])cls.push("fx");if(tap.has&&tap.has(k))cls.push("reach","tap");if(sel.has(k))cls.push("sel");if(o.anyTap)cls.push("tap");
       let in_="";
       if(fixed[k])in_+=`<span class="fxl">${fixed[k]}</span>`;
-      const tr=v.tr.find(t=>t.k===k&&!t.taken);if(tr)in_+=`<span class="tr ${tr.alarm?"alarm":""}" title="${esc(tr.name)}">${E.TR[tr.rank].label[0]}</span>`;
-      const pt=v.parts.find(x=>x.k===k&&!x.taken);if(pt)in_+=`<span class="pt">${{uniform:"服",mask:"面",badge:"証",baton:"棒"}[pt.type]}</span>`;
+      const tr=v.tr.find(t=>t.k===k&&!t.taken);if(tr){const gone=tr.seen&&tr.seen.taken;in_+=`<span class="tr ${tr.alarm&&!gone?"alarm":""} ${gone?"gone":""}" title="${esc(tr.name)}">${gone?"✕":E.TR[tr.rank].label[0]}</span>`;if(tr.seen&&!gone)in_+=`<span class="seen">${tr.seen.stage}/${tr.seen.need}</span>`}
+      const pt=v.parts.find(x=>x.k===k&&!x.taken);if(pt){const gone=pt.seen&&pt.seen.taken;in_+=`<span class="pt ${gone?"gone":""}">${{uniform:"服",mask:"面",badge:"証",baton:"棒"}[pt.type]}</span>`}
       const fps=(v.prints||[]).filter(x=>x.k===k);if(fps.length)in_+=`<span class="fp">${fps.map(x=>`<i class="${x.age?"old":""} ${x.fake?"fake":""}" style="--pc:${pcol(x.pid)}"></i>`).join("")}</span>`;
       const capd=v.players.filter(p=>p.capK===k);
       if(v.thieves){const here=v.thieves.filter(t=>t.k===k&&(t.status==="active"||t.status==="captured"));
@@ -595,7 +598,7 @@ function mapHTML(v,o){
     return `<div class="floorwrap"><div class="floorttl"><span>${f+1}階（${f?"E F / G H":"A B / C D"}）</span><span class="sub">${f?"屋＝屋上階段・窓＝窓":"正＝正面ゲート・裏＝裏口"}・階＝階段</span></div><div class="board">${c}</div></div>`;
   };
   const floors=o.floors||[0,1];
-  return floors.map(floorHTML).join("")+`<div class="legend"><span>高/普/安＝財宝</span><span style="color:var(--part)">服面証棒＝変装パーツ</span><span>●＝足跡（薄いのは2ターン前）</span>${myRole==="det"||all?"<span>🕵＝探偵</span>":""}${myRole!=="det"?"<span>赤枠＝探偵がいた場所</span>":""}<span>⛓＝捕縛中</span><span>点線の丸＝移動予定</span></div>`;
+  return floors.map(floorHTML).join("")+`<div class="legend"><span>高/普/安＝財宝</span><span style="color:var(--part)">服面証棒＝変装パーツ</span><span>●＝足跡（薄いのは2ターン前）</span>${myRole==="det"||all?"<span>🕵＝探偵</span>":""}${myRole==="det"?"<span>✕・薄い字＝調べたらなくなっていた／数字＝調べたときの解除段階（探偵は止まったマスの財宝・変装パーツだけ状況が分かります）</span>":""}${myRole!=="det"?"<span>赤枠＝探偵がいた場所</span>":""}<span>⛓＝捕縛中</span><span>点線の丸＝移動予定</span></div>`;
 }
 
 /* ---------- 準備 ---------- */
@@ -826,6 +829,7 @@ function openRules(){
   <p><b>1ターン</b>：怪盗全員が同時に行動 → 探偵が行動。最大${(V()&&V().opt.turns)||12}ターン。</p>
   <p><b>移動</b>：サイコロの出た目以内のマスへ、縦横に移動（斜めなし）。階段マスから真上・真下の階段マスへは1マスとして数えます。その場に留まることもできます。</p>
   <p><b>怪盗</b>：移動後に1つ行動（セキュリティ解除・仲間の解放作業・捕縛された仲間から財宝の受け取り）。アイテム使用・ヘリを呼ぶ・同じマスの仲間との譲渡は、いつでもできます。毎ターン、出発したマスに足跡が残ります（2ターンで消える）。</p>
+  <p><b>探偵に見える情報</b>：財宝と変装パーツの場所は見えますが、盗まれた・拾われたかどうかは分かりません。探偵が財宝や変装パーツのマスに止まると、そのときの状況（財宝ならまだあるか・解除段階・失敗回数、変装パーツならあるかないか）が分かります。警報は全員に分かります。</p>
   <p><b>財宝</b>：高（${E.TR.high.value}万円・5以上で成功・2段階）／普通（${E.TR.mid.value}万円・5以上）／安（${E.TR.low.value}万円・4以上）。1つの財宝で失敗が2回になると警報が鳴り、場所が探偵に知られます。</p>
   <p><b>脱出</b>：①自分のヘリ（呼んだ2ターン後の始めから3ターン後の終わりまで待機）が来ているときに屋上階段（E-1・H-16）にいる ②変装パーツを${(V()&&V().opt.partsNeed)||4}種類そろえて正面ゲート（D-13）に止まる（探偵が2マス以内なら捕縛）。怪盗全員がヘリを呼んだあとは裏口（A-2）も開きます。窓（F-4・G-13）からはワイヤー銃で脱出できます。</p>
   <p><b>探偵</b>：サイコロを1個ずつ2回振り、移動と行動を2回。行動は捕縛（止まったマスに怪盗がいれば捕縛）・張り込み（留まったときだけ。次の怪盗のターンの終わりに上下左右1マスも捕縛）・何もしない。怪盗が探偵のいるマスに止まると鉢合わせで捕縛。</p>
@@ -894,8 +898,8 @@ function cellInfo(k){
   const v=V();const b=E.bld({building:v.bid});const t=[];
   if(k===b.front)t.push("正面ゲート");if(k===b.back)t.push("裏口"+(v.backOpen?"（開いている）":""));if(b.roof.includes(k))t.push("屋上階段");if(b.windows.includes(k))t.push("窓");
   b.stairs.forEach(p=>{if(p.includes(k))t.push(`階段（${E.nm(p[0])}⇔${E.nm(p[1])}）`)});
-  const tr=v.tr.find(x=>x.k===k&&!x.taken);if(tr)t.push(`財宝「${tr.name}」（${E.TR[tr.rank].label}・${tr.value}万円）${tr.alarm?"🚨警報":""}`);
-  const pt=v.parts.find(x=>x.k===k&&!x.taken);if(pt)t.push(`変装パーツ「${E.PARTS[pt.type]}」`);
+  const tr=v.tr.find(x=>x.k===k&&!x.taken);if(tr)t.push(`財宝「${tr.name}」（${E.TR[tr.rank].label}・${tr.value}万円）${tr.alarm?"🚨警報":""}${v.role==="det"?(tr.seen?`／${tr.seen.t}ターン目に調査：${tr.seen.taken?"盗まれていた":`まだあった（${tr.seen.stage}/${tr.seen.need}段階・失敗${tr.seen.fails}回）`}`:"／未調査"):""}`);
+  const pt=v.parts.find(x=>x.k===k&&!x.taken);if(pt)t.push(`変装パーツ「${E.PARTS[pt.type]}」${v.role==="det"?(pt.seen?`／${pt.seen.t}ターン目に調査：${pt.seen.taken?"なくなっていた":"まだあった"}`:"／未調査"):""}`);
   const fps=(v.prints||[]).filter(x=>x.k===k);if(fps.length)t.push("足跡："+fps.map(x=>pname(x.pid)+(x.age?"（2ターン前）":"（1ターン前）")).join("・"));
   toast(`${E.nm(k)}${t.length?"："+t.join("／"):""}`);
 }
