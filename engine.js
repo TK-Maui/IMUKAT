@@ -5,7 +5,7 @@
 (function (root) {
 "use strict";
 const E = {};
-E.VERSION = "テスト版 v1.5";
+E.VERSION = "テスト版 v1.6";
 
 /* ---------- 乱数（ゲームごとの種から作る。同じ種＋同じ操作なら同じ結果） ---------- */
 let RNG = null;
@@ -96,7 +96,7 @@ const SKILLS = {
 E.TR = TR; E.PARTS = PARTS; E.PART_KEYS = PART_KEYS; E.NOTICES = NOTICES; E.ITEMS = ITEMS; E.SKILLS = SKILLS;
 const PCOL = ["#2f6fd6", "#d1495b", "#2a9d6f", "#c98b12", "#8e5cc4", "#1e9aa8"];
 E.PCOL = PCOL;
-const MONEY = { bail: 100, endCap: 300, capture: 100, failed: 150, block: 200, noticeOpen: 600, noticeHidden: 200, rescue: 200, flair: [300, 200, 100] };
+const MONEY = { bail: 100, endCap: 300, capture: 100, capMax: 2, failed: 150, block: 200, noticeOpen: 600, noticeHidden: 200, rescue: 200, flair: [300, 200, 100] };
 E.MONEY = MONEY;
 
 function defaultOpt() {
@@ -190,7 +190,7 @@ function startRound(g) {
   let ni = 0;
   g.players.forEach(p => {
     if (p.id === g.detId) {
-      p.det = { k: null, skills: [], cd: {}, ready: false, ambush: null, captured: [], capN: 0, sprint: 0, net: false, blackout: false, secured: [], info: [], known: { tr: {}, parts: {} } };
+      p.det = { k: null, skills: [], cd: {}, ready: false, ambush: null, captured: [], capN: 0, capBy: {}, sprint: 0, net: false, blackout: false, secured: [], info: [], known: { tr: {}, parts: {} } };
     } else {
       p.th = { k: null, status: "active", loot: [], parts: {}, items: g.opt.items ? [deck.pop(), deck.pop()].filter(Boolean) : [], notice: notices[ni++ % notices.length], declared: null,
         heliCall: null, escTurn: null, escHow: null, escK: null, rescues: 0, alarmTrig: false, rel: 0, relNeed: 2, relBy: [], pendingRecv: null, tp: null, stats: { moves: 0, stays: 0, unlockTry: 0, unlockOk: 0, fails: 0, timeouts: 0, items: 0 } };
@@ -362,7 +362,7 @@ function capture(g, p, why, dk) {
   const th = p.th; const d = det(g);
   th.status = "captured"; th.rel = 0; th.relNeed = 2; th.relBy = []; th.pendingRecv = null;
   g.prints = g.prints.filter(x => x.pid !== p.id);
-  d.det.capN++; if (!d.det.captured.includes(p.id)) d.det.captured.push(p.id);
+  d.det.capN++; d.det.capBy = d.det.capBy || {}; d.det.capBy[p.id] = (d.det.capBy[p.id] || 0) + 1; if (!d.det.captured.includes(p.id)) d.det.captured.push(p.id);
   const how = { meet: "探偵と鉢合わせして", det: "探偵に", ambush: "張り込み中の探偵に", disguise: "変装を見破られて" }[why] || "";
   log(g, "all", `${p.name}が${how}捕縛されました（${nm(th.k)}）`);
   if (why === "disguise") g.reveals.push({ r: g.round, t: g.turn, text: `探偵は ${nm(th.k)} から2マス以内にいた` });
@@ -660,7 +660,7 @@ function endRound(g, why) {
   const capturedNow = ts.filter(p => p.th.status === "captured");
   capturedNow.forEach(() => ts.forEach(p => pay(g, p, MONEY.bail, "保釈金"))); // 保釈金は銀行へ
   gain(dp, capturedNow.length * MONEY.endCap, "捕縛の報奨金");
-  gain(dp, d.captured.length * MONEY.capture, "累計捕縛");
+  gain(dp, Object.values(d.capBy || {}).reduce((a, n) => a + Math.min(n, MONEY.capMax), 0) * MONEY.capture, "累計捕縛"); // 同じ怪盗は2回まで
   gain(dp, ts.filter(p => p.th.status === "failed").length * MONEY.failed, "脱出失敗");
   gain(dp, ts.filter(p => p.th.declared && !p.th.noticeOK).length * MONEY.block, "予告阻止");
   g.players.forEach(p => { if (p.det) p.total.det += (p.money - p.debt) - p.rd.start; });
@@ -677,7 +677,7 @@ function endRound(g, why) {
       share: e["山分け"] || 0, noticeBonus: e["予告状"] || 0, flair: e["華麗さ"] || 0, rescue: e["救出"] || 0, bail: e["保釈金"] || 0, endCapReward: e["捕縛の報奨金"] || 0,
       capReward: e["累計捕縛"] || 0, failReward: e["脱出失敗"] || 0, blockReward: e["予告阻止"] || 0,
       delta: (p.money - p.debt) - p.rd.start, money: p.money, debt: p.debt, net: p.money - p.debt,
-      captures: p.det ? p.det.captured.length : "", capN: p.det ? p.det.capN : "",
+      captures: p.det ? p.det.captured.length : "", capN: p.det ? p.det.capN : "", capPaid: p.det ? Object.values(p.det.capBy || {}).reduce((a, n) => a + Math.min(n, MONEY.capMax), 0) : "",
       moves: st ? st.moves : "", stays: st ? st.stays : "", unlockTry: st ? st.unlockTry : "", unlockOk: st ? st.unlockOk : "", fails: st ? st.fails : "",
       rescues: th ? th.rescues : "", items: st ? st.items : "", timeouts: st ? st.timeouts : "", heliTurn: th && th.heliCall != null ? th.heliCall : "",
       alarms: g.tr.filter(t => t.alarm).length, treasuresTaken: g.tr.filter(t => t.taken).length, pot, skills: p.det ? p.det.skills.map(x => SKILLS[x].name).join("・") : "",
@@ -786,7 +786,7 @@ E.ACT_COLS = [["at", "時刻"], ["round", "ラウンド"], ["turn", "ターン"]
 E.REC_COLS = [["round", "ラウンド"], ["name", "名前"], ["role", "役"], ["status", "結果"], ["escHow", "脱出方法"], ["escTurn", "脱出ターン"], ["loot", "持ち出した財宝"], ["lootValue", "財宝の額"],
   ["notice", "予告状"], ["declared", "予告"], ["noticeOK", "予告達成"], ["share", "山分け"], ["noticeBonus", "予告状ボーナス"], ["flair", "華麗さ"], ["rescue", "救出"], ["bail", "保釈金"],
   ["endCapReward", "捕縛の報奨金"], ["capReward", "累計捕縛"], ["failReward", "脱出失敗の報酬"], ["blockReward", "予告阻止"], ["delta", "このラウンドの増減"], ["money", "所持金"], ["debt", "借金"], ["net", "差し引き"],
-  ["captures", "捕縛した人数"], ["capN", "捕縛回数"], ["moves", "移動回数"], ["stays", "留まった回数"], ["unlockTry", "解除の挑戦"], ["unlockOk", "解除の成功"], ["fails", "解除の失敗"],
+  ["captures", "捕縛した人数"], ["capN", "捕縛回数"], ["capPaid", "報酬の対象になった捕縛回数"], ["moves", "移動回数"], ["stays", "留まった回数"], ["unlockTry", "解除の挑戦"], ["unlockOk", "解除の成功"], ["fails", "解除の失敗"],
   ["rescues", "解放した回数"], ["items", "使ったアイテム"], ["timeouts", "時間切れ"], ["heliTurn", "ヘリを呼んだターン"], ["alarms", "鳴った警報"], ["treasuresTaken", "盗まれた財宝"], ["pot", "持ち出し合計"], ["skills", "探偵のスキル"], ["endReason", "終了理由"], ["endTurn", "終了ターン"]];
 E.csvActions = g => toCSV(E.ACT_COLS, g.alog.map(r => Object.assign({}, r, { at: new Date(r.at).toLocaleString("ja-JP") })));
 E.csvRecords = g => toCSV(E.REC_COLS, g.records);
