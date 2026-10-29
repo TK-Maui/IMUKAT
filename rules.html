@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>IMUKAT ルール</title>
+<style>
+:root{--bg:#eef1f6;--panel:#ffffff;--ink:#1b2430;--sub:#5b6878;--line:#d5dde8;--accent:#6b3fd1;--accent-ink:#fff;--warn:#c2410c;--ok:#15803d;--gold:#b7791f;--gold-bg:#fdf3dc;--cell:#f4f6fa;--cell2:#e9edf4}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#10131b;--panel:#191e2a;--ink:#e6e9f2;--sub:#9aa3b8;--line:#2c3446;--accent:#9b7cf0;--accent-ink:#11131b;--warn:#fb923c;--ok:#4ade80;--gold:#f0b44c;--gold-bg:#3a2e14;--cell:#1d2331;--cell2:#232a3a}}
+:root[data-theme="dark"]{--bg:#10131b;--panel:#191e2a;--ink:#e6e9f2;--sub:#9aa3b8;--line:#2c3446;--accent:#9b7cf0;--accent-ink:#11131b;--warn:#fb923c;--ok:#4ade80;--gold:#f0b44c;--gold-bg:#3a2e14;--cell:#1d2331;--cell2:#232a3a}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif;font-size:15px;line-height:1.6}
+main{max-width:720px;margin:0 auto;padding:12px 16px 60px;background:var(--panel);min-height:100vh}
+h1{font-size:20px;margin:4px 0}
+.sub{color:var(--sub);font-size:13px}
+button{font:inherit;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:10px;padding:8px 12px;cursor:pointer;min-height:40px}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{text-align:left;vertical-align:top}
+td.n,th.n{text-align:right}
+.ok{color:var(--ok)}.ng{color:var(--warn)}
+a{color:var(--accent)}
+</style>
+</head>
+<body>
+<main>
+<h1>IMUKAT ルール</h1>
+<div class="sub"><a href="./">← テストプレイのページへ</a></div>
+<div id="rb"></div>
+</main>
+<script src="engine.js"></script>
+<script src="rules.js"></script>
+<script>
+const tab=new URLSearchParams(location.search).get("tab");
+IMUKAT_RULES.render(document.getElementById("rb"),tab==="full"||tab==="easy"?tab:null);
+</script>
+</body>
+</html>

@@ -105,6 +105,7 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 <div class="side" id="side"></div>
 <dialog id="dlg"></dialog>
 <script src="engine.js"></script>
+<script src="rules.js"></script>
 <script>
 "use strict";
 const E=window.IMUKAT;
@@ -476,6 +477,10 @@ function renderTitle(){
   $("#app").innerHTML=`
   <h1>IMUKAT <span class="sub">${esc(VERSION)}</span></h1>
   <div class="sub">探偵1人と怪盗集団が、互いの位置を隠したまま建物の中で駆け引きするボードゲームのテスト版です。</div>
+  <div class="panel row" style="justify-content:space-between">
+    <div><b>はじめての人へ</b><div class="sub">5分で読めるかんたんルールと、表や図つきのくわしいルールがあります。</div></div>
+    <div class="row"><button class="primary" id="brules_easy">📖 かんたんルール</button><button id="brules_full">くわしいルール</button></div>
+  </div>
   <div class="panel">
     <h2 style="margin-top:0">部屋に参加する</h2>
     <div class="row"><input id="jname" placeholder="名前" maxlength="12" class="grow" value="${esc(lastGuest?.name||"")}">
@@ -498,7 +503,9 @@ function renderTitle(){
   if($("#bresume"))$("#bresume").onclick=()=>hostCreate(null,lastHost);
   $("#blocal").onclick=()=>localStart(+$("#lnum").value);
   if($("#blocalres"))$("#blocalres").onclick=()=>{S.mode="local";S.code="LOCAL";S.hist=[];S.game=store.get("imukat_local");S.seat=E.pendingIds(S.game)[0]||"P1";broadcast()};
-  $("#brules0").onclick=openRules;
+  $("#brules0").onclick=()=>openRules();
+  $("#brules_easy").onclick=()=>openRules("easy");
+  $("#brules_full").onclick=()=>openRules("full");
 }
 
 function render(){
@@ -751,7 +758,7 @@ function renderSide(v){
   b.push(`<button id="sRules" title="ルール">📖<span class="lb">ルール</span></button>`);
   $("#side").innerHTML=b.join("");
   const on=(id,f)=>{const e=document.getElementById(id);if(e)e.onclick=f};
-  on("sNotice",openNotice);on("sMoney",openMoney);on("sItems",openItems);on("sSkills",openSkills);on("sLog",openLog);on("sRules",openRules);
+  on("sNotice",openNotice);on("sMoney",openMoney);on("sItems",openItems);on("sSkills",openSkills);on("sLog",openLog);on("sRules",()=>openRules());
 }
 function dlg(html){const d=$("#dlg");d.innerHTML=html+`<div class="row" style="margin-top:10px"><button id="dclose">閉じる</button></div>`;if(!d.open)d.showModal();$("#dclose").onclick=()=>d.close();return d}
 function openNotice(){
@@ -829,20 +836,11 @@ function download(kind){
   else if(kind==="json")dlFile(`imukat_${stamp()}_alldata.json`,JSON.stringify(g,null,1),"application/json");
   else if(kind==="history"){const all=store.get("imukat_records")||{};const rows=Object.values(all).flat();if(!rows.length){toast("まだ記録がありません");return}dlFile(`imukat_history_${stamp()}.csv`,E.csvRecords({records:rows}),"text/csv")}
 }
-function openRules(){
-  const M=E.MONEY;
-  dlg(`<h2 style="margin-top:0">📖 ルール（テスト版のまとめ）</h2>
-  <p><b>目的</b>：全ラウンド終了時に、所持金（借金を差し引いた額）が一番多い人の勝ち。ラウンド数は人数と同じで、全員が1回ずつ探偵をします。</p>
-  <p><b>スタート</b>：怪盗は1人ずつ、裏口（A-2）・正面ゲート（D-13）・2階の窓（F-4・G-13）から秘密に選びます（仲間には見えます）。探偵は2階の何もないマス（財宝・変装パーツ・階段・窓・屋上階段以外）から秘密に選びます。1ターン目は足跡が残りません。</p>
-  <p><b>1ターン</b>：怪盗全員が同時に行動 → 探偵が行動。最大${(V()&&V().opt.turns)||12}ターン。</p>
-  <p><b>移動</b>：サイコロの出た目以内のマスへ、縦横に移動（斜めなし）。階段マスから真上・真下の階段マスへは1マスとして数えます。その場に留まることもできます。</p>
-  <p><b>怪盗</b>：移動後に1つ行動（セキュリティ解除・仲間の解放作業・捕縛された仲間から財宝の受け取り）。アイテム使用・ヘリを呼ぶ・同じマスの仲間との譲渡は、いつでもできます。毎ターン、出発したマスに足跡が残ります（2ターンで消える）。</p>
-  <p><b>探偵に見える情報</b>：財宝と変装パーツの場所は見えますが、盗まれた・拾われたかどうかは分かりません。探偵が財宝や変装パーツのマスに止まると、そのときの状況（財宝ならまだあるか・解除段階・失敗回数、変装パーツならあるかないか）が分かります。警報は全員に分かります。</p>
-  <p><b>財宝</b>：高（${E.TR.high.value}万円・5以上で成功・2段階）／普通（${E.TR.mid.value}万円・5以上）／安（${E.TR.low.value}万円・4以上）。1つの財宝で失敗が2回になると警報が鳴り、場所が探偵に知られます。</p>
-  <p><b>脱出</b>：①自分のヘリ（呼んだ2ターン後の始めから3ターン後の終わりまで待機）が来ているときに屋上階段（E-1・H-16）にいる ②変装パーツを${(V()&&V().opt.partsNeed)||4}種類そろえて正面ゲート（D-13）に止まる（探偵が2マス以内なら捕縛）。怪盗全員がヘリを呼んだあとは裏口（A-2）も開きます。窓（F-4・G-13）からはワイヤー銃で脱出できます。</p>
-  <p><b>探偵</b>：サイコロを1個ずつ2回振り、移動と行動を2回。行動は捕縛（止まったマスに怪盗がいれば捕縛）・張り込み（留まったときだけ。次の怪盗のターンの終わりに上下左右1マスも捕縛）・何もしない。怪盗が探偵のいるマスに止まると鉢合わせで捕縛。</p>
-  <p><b>お金</b>：山分け（持ち出した財宝の合計÷怪盗の人数、100万円単位で切り捨て、全員一律）／予告状 予告${M.noticeOpen}・伏せ${M.noticeHidden}／華麗さ（財宝を持って脱出：5ターン以内${M.flair[0]}・8ターン以内${M.flair[1]}・それ以降${M.flair[2]}）／救出 ${M.rescue}。保釈金（ラウンド終了時に捕縛中の怪盗1人につき、怪盗全員が${M.bail}ずつ銀行に払う）。探偵：捕縛の報奨金（ラウンド終了時に捕縛中の怪盗1人につき銀行から${M.endCap}）・累計捕縛 ${M.capture}（捕縛1回ごと・同じ怪盗は${M.capMax}回まで）・脱出失敗 ${M.failed}・予告阻止 ${M.block}。足りないときは借金。</p>
-  <p class="sub">アイテムとスキルは仮の効果です。詳しくは企画書を参照してください。</p>`);
+function openRules(tab){
+  const d=dlg(`<div id="rbbox"></div><div class="sub" style="margin-top:8px"><a href="rules.html" target="_blank" rel="noopener">別のページで開く</a></div>`);
+  if(window.IMUKAT_RULES)IMUKAT_RULES.render(document.getElementById("rbbox"),typeof tab==="string"?tab:null);
+  else document.getElementById("rbbox").textContent="ルールを読み込めませんでした。ページを開き直してください。";
+  d.scrollTop=0;
 }
 
 /* ---------- ボタンの割り当て ---------- */
