@@ -5,7 +5,7 @@
 (function (root) {
 "use strict";
 const E = {};
-E.VERSION = "テスト版 v1.4";
+E.VERSION = "テスト版 v1.5";
 
 /* ---------- 乱数（ゲームごとの種から作る。同じ種＋同じ操作なら同じ結果） ---------- */
 let RNG = null;
@@ -96,7 +96,7 @@ const SKILLS = {
 E.TR = TR; E.PARTS = PARTS; E.PART_KEYS = PART_KEYS; E.NOTICES = NOTICES; E.ITEMS = ITEMS; E.SKILLS = SKILLS;
 const PCOL = ["#2f6fd6", "#d1495b", "#2a9d6f", "#c98b12", "#8e5cc4", "#1e9aa8"];
 E.PCOL = PCOL;
-const MONEY = { bail: 100, capture: 100, failed: 150, block: 200, noticeOpen: 600, noticeHidden: 200, rescue: 200, flair: [300, 200, 100] };
+const MONEY = { bail: 100, endCap: 300, capture: 100, failed: 150, block: 200, noticeOpen: 600, noticeHidden: 200, rescue: 200, flair: [300, 200, 100] };
 E.MONEY = MONEY;
 
 function defaultOpt() {
@@ -658,7 +658,8 @@ function endRound(g, why) {
     gain(p, th.rescues * MONEY.rescue, "救出");
   });
   const capturedNow = ts.filter(p => p.th.status === "captured");
-  capturedNow.forEach(() => ts.forEach(p => { pay(g, p, MONEY.bail, "保釈金"); gain(dp, MONEY.bail, "保釈金"); }));
+  capturedNow.forEach(() => ts.forEach(p => pay(g, p, MONEY.bail, "保釈金"))); // 保釈金は銀行へ
+  gain(dp, capturedNow.length * MONEY.endCap, "捕縛の報奨金");
   gain(dp, d.captured.length * MONEY.capture, "累計捕縛");
   gain(dp, ts.filter(p => p.th.status === "failed").length * MONEY.failed, "脱出失敗");
   gain(dp, ts.filter(p => p.th.declared && !p.th.noticeOK).length * MONEY.block, "予告阻止");
@@ -673,7 +674,7 @@ function endRound(g, why) {
       loot: th ? th.loot.map(id => g.tr.find(t => t.id === id).name).join("・") : "",
       lootValue: th ? th.loot.reduce((a, id) => a + g.tr.find(t => t.id === id).value, 0) : "",
       notice: th ? NOTICES[th.notice].name : "", declared: th ? (th.declared ? "予告" : "非公開") : "", noticeOK: th ? (th.noticeOK ? "達成" : "未達成") : "",
-      share: e["山分け"] || 0, noticeBonus: e["予告状"] || 0, flair: e["華麗さ"] || 0, rescue: e["救出"] || 0, bail: e["保釈金"] || 0,
+      share: e["山分け"] || 0, noticeBonus: e["予告状"] || 0, flair: e["華麗さ"] || 0, rescue: e["救出"] || 0, bail: e["保釈金"] || 0, endCapReward: e["捕縛の報奨金"] || 0,
       capReward: e["累計捕縛"] || 0, failReward: e["脱出失敗"] || 0, blockReward: e["予告阻止"] || 0,
       delta: (p.money - p.debt) - p.rd.start, money: p.money, debt: p.debt, net: p.money - p.debt,
       captures: p.det ? p.det.captured.length : "", capN: p.det ? p.det.capN : "",
@@ -784,7 +785,7 @@ function toCSV(cols, rows) { return "﻿" + [cols.map(c => q(c[1])).join(","), .
 E.ACT_COLS = [["at", "時刻"], ["round", "ラウンド"], ["turn", "ターン"], ["stage", "場面"], ["name", "プレイヤー"], ["role", "役"], ["kind", "操作"], ["from", "移動元"], ["to", "移動先・対象"], ["dice", "出目"], ["detail", "内容"], ["result", "結果"]];
 E.REC_COLS = [["round", "ラウンド"], ["name", "名前"], ["role", "役"], ["status", "結果"], ["escHow", "脱出方法"], ["escTurn", "脱出ターン"], ["loot", "持ち出した財宝"], ["lootValue", "財宝の額"],
   ["notice", "予告状"], ["declared", "予告"], ["noticeOK", "予告達成"], ["share", "山分け"], ["noticeBonus", "予告状ボーナス"], ["flair", "華麗さ"], ["rescue", "救出"], ["bail", "保釈金"],
-  ["capReward", "累計捕縛"], ["failReward", "脱出失敗の報酬"], ["blockReward", "予告阻止"], ["delta", "このラウンドの増減"], ["money", "所持金"], ["debt", "借金"], ["net", "差し引き"],
+  ["endCapReward", "捕縛の報奨金"], ["capReward", "累計捕縛"], ["failReward", "脱出失敗の報酬"], ["blockReward", "予告阻止"], ["delta", "このラウンドの増減"], ["money", "所持金"], ["debt", "借金"], ["net", "差し引き"],
   ["captures", "捕縛した人数"], ["capN", "捕縛回数"], ["moves", "移動回数"], ["stays", "留まった回数"], ["unlockTry", "解除の挑戦"], ["unlockOk", "解除の成功"], ["fails", "解除の失敗"],
   ["rescues", "解放した回数"], ["items", "使ったアイテム"], ["timeouts", "時間切れ"], ["heliTurn", "ヘリを呼んだターン"], ["alarms", "鳴った警報"], ["treasuresTaken", "盗まれた財宝"], ["pot", "持ち出し合計"], ["skills", "探偵のスキル"], ["endReason", "終了理由"], ["endTurn", "終了ターン"]];
 E.csvActions = g => toCSV(E.ACT_COLS, g.alog.map(r => Object.assign({}, r, { at: new Date(r.at).toLocaleString("ja-JP") })));
