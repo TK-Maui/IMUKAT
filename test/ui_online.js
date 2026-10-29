@@ -23,7 +23,7 @@ const BASE = (process.env.BASE || "http://127.0.0.1:8765/") + "?transport=bc";
     if (hv.phase === "roundEnd" || (hv.phase === "play" && hv.turn >= 4 && undoDone && reconDone)) break;
     for (const p of pages) {
       const v = await view(p); if (!v || !v.pend.includes(v.me)) continue;
-      if (v.phase === "setup") { if (v.role === "det") { await p.click("#bsetrand"); await p.click("#bsetdet"); } else await p.click("#bdecN"); break; }
+      if (v.phase === "setup") { if (v.role === "det") { await p.click("#bsetrand"); await p.click("#bsetdet"); } else { const st0 = await p.$$("[data-tstart]"); await st0[0].click(); await p.click("#bdecN"); } break; }
       if (v.role === "thief") {
         if (v.status === "captured") { if (await p.$("#bconf")) await p.click("#bconf"); break; }
         if (v.tp.roll == null && !v.tp.stay) { await p.click("#broll"); break; }

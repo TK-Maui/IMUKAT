@@ -605,21 +605,24 @@ function renderSetup(v){
   if(v.role==="det"){
     if(!v.det.ready){
       const sel=S.ui.skills||[];const st=S.ui.start;
-      h+=`<div class="panel me"><b>🕵 探偵の準備</b><div class="sub">2階のマップでスタート地点を選んでください${v.opt.skills?"。スキルを4つ選んでください（右の🔍からも説明を見られます）":""}。</div>`;
+      h+=`<div class="panel me"><b>🕵 探偵の準備</b><div class="sub">2階のマップでスタート地点を選んでください（窓のマスは怪盗のスタート候補なので選べません）${v.opt.skills?"。スキルを4つ選んでください（右の🔍からも説明を見られます）":""}。</div>`;
       if(v.opt.skills)h+=`<div class="acts">${Object.entries(E.SKILLS).map(([id,s])=>`<button data-skpick="${id}" class="${sel.includes(id)?"on primary":""}"><b>${esc(s.name)}</b><small>${s.ct?`使ったあと${s.ct}ターン休み`:"1財宝1回"}</small></button>`).join("")}</div><div class="sub">選んだスキル：${sel.length}/4</div>`;
       h+=`<div class="sub" style="margin-top:6px">スタート地点：<b>${st!=null?E.nm(st):"未選択"}</b></div>`;
       h+=`<div class="row" style="margin-top:6px"><button class="primary" id="bsetdet" ${st!=null&&(!v.opt.skills||sel.length===4)?"":"disabled"}>準備完了</button><button id="bsetrand">おまかせで選ぶ</button></div></div>`;
-      h+=mapHTML(v,{floors:[1],tap:new Set(Array.from({length:64},(_,i)=>64+i)),sel:st!=null?[st]:[]});
+      const bs=E.bld({building:v.bid}).starts;h+=mapHTML(v,{floors:[1],tap:new Set(Array.from({length:64},(_,i)=>64+i).filter(k=>!bs.includes(k))),sel:st!=null?[st]:[]});
     }else h+=`<div class="panel">準備完了。怪盗が予告状を決めるのを待っています。</div>`;
   }else if(v.role==="thief"){
     const n=E.NOTICES[v.my.notice];
     if(v.my.declared==null){
-      h+=`<div class="panel me"><b>📜 あなたの予告状</b><div class="card notice"><b>${esc(n.name)}</b><div>${esc(n.text)}</div></div>
+      const b0=E.bld({building:v.bid});const ts=S.ui.tstart;
+      h+=`<div class="panel me"><b>🚪 スタート地点</b><div class="sub">裏口（A-2）・正面ゲート（D-13）・2階の窓（F-4・G-13）から1つ選んでください。仲間の選んだ場所は共有マップで見えますが、探偵には分かりません。1ターン目は足跡が残りません。</div>
+      <div class="row" style="margin-top:6px">${b0.starts.map(k=>`<button data-tstart="${k}" class="${ts===k?"on primary":""}">${{[b0.back]:"裏口",[b0.front]:"正面ゲート"}[k]||"窓"} ${E.nm(k)}</button>`).join("")}</div></div>
+      <div class="panel me"><b>📜 あなたの予告状</b><div class="card notice"><b>${esc(n.name)}</b><div>${esc(n.text)}</div></div>
       <div class="sub">予告すると全員に公開され、達成して財宝を持って脱出すれば ${yen(E.MONEY.noticeOpen)}。予告しなければ伏せたままで、達成すれば ${yen(E.MONEY.noticeHidden)}。予告した怪盗が達成できなければ、探偵に ${yen(E.MONEY.block)}。<br>全員が決めたら同時に公開されます。</div>
-      <div class="row" style="margin-top:8px"><button class="primary" id="bdecY">予告する</button><button id="bdecN">予告しない</button></div></div>`;
-    }else h+=`<div class="panel">予告状を${v.my.declared?"「予告する」":"「予告しない」"}に決めました。ほかの人を待っています。</div>`;
+      <div class="row" style="margin-top:8px"><button class="primary" id="bdecY" ${S.ui.tstart!=null?"":"disabled"}>予告する</button><button id="bdecN" ${S.ui.tstart!=null?"":"disabled"}>予告しない</button></div>${S.ui.tstart!=null?"":`<div class="sub">先にスタート地点を選んでください</div>`}</div>`;
+    }else h+=`<div class="panel">スタート地点を ${E.nm(v.my.k)}、予告状を${v.my.declared?"「予告する」":"「予告しない」"}に決めました。ほかの人を待っています。</div>`;
     if(v.my.items.length)h+=`<div class="panel"><b>🃏 このラウンドのアイテム</b><div class="sub">${v.my.items.map(i=>esc(E.ITEMS[i].name)).join("・")}（右の🃏で効果を見られます）</div></div>`;
-    h+=mapHTML(v,{});
+    h+=mapHTML(v,v.my.declared==null?{tap:new Set(E.bld({building:v.bid}).starts),sel:S.ui.tstart!=null?[S.ui.tstart]:[]}:{});
   }
   h+=`<div class="sub">待っている人：${pend.map(chip).join(" ")||"なし"}</div>`;
   return h;
@@ -819,6 +822,7 @@ function openRules(){
   const M=E.MONEY;
   dlg(`<h2 style="margin-top:0">📖 ルール（テスト版のまとめ）</h2>
   <p><b>目的</b>：全ラウンド終了時に、所持金（借金を差し引いた額）が一番多い人の勝ち。ラウンド数は人数と同じで、全員が1回ずつ探偵をします。</p>
+  <p><b>スタート</b>：怪盗は1人ずつ、裏口（A-2）・正面ゲート（D-13）・2階の窓（F-4・G-13）から秘密に選びます（仲間には見えます）。探偵は2階の窓以外のマスから秘密に選びます。1ターン目は足跡が残りません。</p>
   <p><b>1ターン</b>：怪盗全員が同時に行動 → 探偵が行動。最大${(V()&&V().opt.turns)||12}ターン。</p>
   <p><b>移動</b>：サイコロの出た目以内のマスへ、縦横に移動（斜めなし）。階段マスから真上・真下の階段マスへは1マスとして数えます。その場に留まることもできます。</p>
   <p><b>怪盗</b>：移動後に1つ行動（セキュリティ解除・仲間の解放作業・捕縛された仲間から財宝の受け取り）。アイテム使用・ヘリを呼ぶ・同じマスの仲間との譲渡は、いつでもできます。毎ターン、出発したマスに足跡が残ります（2ターンで消える）。</p>
@@ -847,9 +851,10 @@ function bind(){
   on("bnext",()=>{const err=hostApply(S.seat,{kind:"nextRound"});if(err)toast(err);S.ui={};broadcast()});
   // 準備
   document.querySelectorAll("[data-skpick]").forEach(b=>b.onclick=()=>{const s=S.ui.skills=S.ui.skills||[];const id=b.dataset.skpick;const i=s.indexOf(id);if(i>=0)s.splice(i,1);else if(s.length<4)s.push(id);else toast("4つまでです");render()});
-  on("bsetrand",()=>{const ks=Object.keys(E.SKILLS).sort(()=>Math.random()-.5);S.ui.skills=ks.slice(0,4);S.ui.start=64+Math.floor(Math.random()*64);render()});
+  on("bsetrand",()=>{const ks=Object.keys(E.SKILLS).sort(()=>Math.random()-.5);S.ui.skills=ks.slice(0,4);const bs=E.bld({building:V().bid}).starts;let k;do{k=64+Math.floor(Math.random()*64)}while(bs.includes(k));S.ui.start=k;render()});
   on("bsetdet",()=>{doAct({kind:"setupDet",k:S.ui.start,skills:S.ui.skills||[]});S.ui={}});
-  on("bdecY",()=>doAct({kind:"declare",yes:true}));on("bdecN",()=>doAct({kind:"declare",yes:false}));
+  on("bdecY",()=>{doAct({kind:"declare",yes:true,start:S.ui.tstart});S.ui.tstart=null});on("bdecN",()=>{doAct({kind:"declare",yes:false,start:S.ui.tstart});S.ui.tstart=null});
+  document.querySelectorAll("[data-tstart]").forEach(b=>b.onclick=()=>{S.ui.tstart=+b.dataset.tstart;render()});
   // 怪盗
   on("broll",()=>doAct({kind:"roll"}));on("bstay",()=>doAct({kind:"stay"}));
   on("bheli",()=>{if(confirm("ヘリを呼びますか？（1ラウンド1回・全員に分かります）"))doAct({kind:"heli"})});
@@ -871,7 +876,8 @@ function bind(){
 }
 function cellTap(k){
   const v=V();
-  if(v.phase==="setup"&&v.role==="det"&&!v.det.ready){if(k<64){toast("スタートは2階から選んでください");return}S.ui.start=k;render();return}
+  if(v.phase==="setup"&&v.role==="det"&&!v.det.ready){if(k<64){toast("スタートは2階から選んでください");return}if(E.bld({building:v.bid}).starts.includes(k)){toast("窓のマスは怪盗のスタート候補なので選べません");return}S.ui.start=k;render();return}
+  if(v.phase==="setup"&&v.role==="thief"&&v.my.declared==null&&E.bld({building:v.bid}).starts.includes(k)){S.ui.tstart=k;render();return}
   if(v.phase==="play"&&v.role==="thief"&&v.stage==="thief"){
     if(S.ui.itemTarget){const it=S.ui.itemTarget;S.ui.itemTarget=null;doAct({kind:"useItem",item:it,k});return}
     const tp=v.my.tp,me=myThief(v);

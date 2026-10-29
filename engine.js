@@ -5,7 +5,7 @@
 (function (root) {
 "use strict";
 const E = {};
-E.VERSION = "テスト版 v1.0";
+E.VERSION = "テスト版 v1.1";
 
 /* ---------- 乱数（ゲームごとの種から作る。同じ種＋同じ操作なら同じ結果） ---------- */
 let RNG = null;
@@ -37,7 +37,7 @@ E.nm = nm; E.parse = parse; E.areaOf = areaOf; E.FL = FL; E.RW = RW; E.CL = CL; 
 const BUILDINGS = {
   museum: {
     name: "美術館", front: "D-13", back: "A-2", stairs: [["B-9", "F-9"], ["C-8", "G-8"]],
-    roof: ["E-1", "H-16"], windows: ["F-4", "G-13"], start: "A-2",
+    roof: ["E-1", "H-16"], windows: ["F-4", "G-13"], starts: ["A-2", "D-13", "F-4", "G-13"],
     tnames: { high: ["夜明けの涙"], mid: ["月下の貴婦人", "時を止めた懐中時計"], low: ["銀の燭台"] },
   },
 };
@@ -47,7 +47,7 @@ function bld(g) {
   if (!_bk[id]) {
     const b = BUILDINGS[id];
     _bk[id] = { name: b.name, front: parse(b.front), back: parse(b.back), stairs: b.stairs.map(p => p.map(parse)),
-      roof: b.roof.map(parse), windows: b.windows.map(parse), start: parse(b.start), tnames: b.tnames };
+      roof: b.roof.map(parse), windows: b.windows.map(parse), starts: b.starts.map(parse), tnames: b.tnames };
   }
   return _bk[id];
 }
@@ -192,7 +192,7 @@ function startRound(g) {
     if (p.id === g.detId) {
       p.det = { k: null, skills: [], cd: {}, ready: false, ambush: null, captured: [], capN: 0, sprint: 0, net: false, blackout: false, secured: [], info: [] };
     } else {
-      p.th = { k: b.start, status: "active", loot: [], parts: {}, items: g.opt.items ? [deck.pop(), deck.pop()].filter(Boolean) : [], notice: notices[ni++ % notices.length], declared: null,
+      p.th = { k: null, status: "active", loot: [], parts: {}, items: g.opt.items ? [deck.pop(), deck.pop()].filter(Boolean) : [], notice: notices[ni++ % notices.length], declared: null,
         heliCall: null, escTurn: null, escHow: null, escK: null, rescues: 0, alarmTrig: false, rel: 0, relNeed: 2, relBy: [], pendingRecv: null, tp: null, stats: { moves: 0, stays: 0, unlockTry: 0, unlockOk: 0, fails: 0, timeouts: 0, items: 0 } };
     }
   });
@@ -393,7 +393,7 @@ function resolveThieves(g) {
     const th = p.th, tp = th.tp;
     if (th.status !== "active") continue;
     if (tp.dest == null) { tp.dest = th.k; tp.stay = true; tp.act = "none"; th.stats.timeouts++; }
-    if (!tp.use.erase) g.prints.push({ pid: p.id, k: th.k, age: 0 });
+    if (!tp.use.erase && g.turn > 1) g.prints.push({ pid: p.id, k: th.k, age: 0 });
     if (tp.use.fake != null) g.prints.push({ pid: p.id, k: tp.use.fake, age: 0, fake: true });
     const from = th.k; th.k = tp.dest;
     if (tp.stay || from === th.k) th.stats.stays++; else th.stats.moves++;
@@ -577,6 +577,7 @@ function setupAct(g, p, a) {
     if (!p.det) return "探偵ではありません";
     if (p.det.ready) return "準備はもう終わっています";
     const k = +a.k; if (!(k >= 64 && k < 128)) return "スタートは2階のマスから選んでください";
+    if (bld(g).starts.includes(k)) return "怪盗のスタート候補（窓）のマスは選べません";
     let sk = [];
     if (g.opt.skills) { sk = [...new Set(a.skills || [])].filter(x => SKILLS[x]); if (sk.length !== 4) return "スキルを4つ選んでください"; }
     p.det.k = k; p.det.skills = sk; p.det.ready = true;
@@ -585,7 +586,9 @@ function setupAct(g, p, a) {
   } else if (a.kind === "declare") {
     if (!p.th) return "怪盗ではありません";
     if (p.th.declared != null) return "もう決めています";
-    p.th.declared = !!a.yes;
+    const sk = +a.start; if (!bld(g).starts.includes(sk)) return "スタート地点を選んでください";
+    p.th.k = sk; p.th.declared = !!a.yes;
+    alog(g, p.id, "スタート地点", { to: nm(sk) });
     alog(g, p.id, "予告状", { detail: NOTICES[p.th.notice].name, result: a.yes ? "予告する" : "予告しない" });
   } else return "不明な操作です";
   if (det(g).det.ready && thieves(g).every(q => q.th.declared != null)) {
@@ -698,7 +701,7 @@ function proxyAct(g, pid) {
   const p = P(g, pid); if (!p) return "プレイヤーがいません";
   if (g.phase === "setup") {
     if (p.det && !p.det.ready) { const sk = shuffle(Object.keys(SKILLS)).slice(0, 4); return setupAct(g, p, { kind: "setupDet", k: 64 + rnd(64), skills: sk }); }
-    if (p.th && p.th.declared == null) return setupAct(g, p, { kind: "declare", yes: false });
+    if (p.th && p.th.declared == null) { const st = bld(g).starts; return setupAct(g, p, { kind: "declare", yes: false, start: st[rnd(st.length)] }); }
     return null;
   }
   if (g.phase !== "play") return null;

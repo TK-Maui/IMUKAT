@@ -24,7 +24,7 @@ const BASE = process.env.BASE || "http://127.0.0.1:8765/";
     if (!st.pend.includes(st.seat)) { await page.click(`[data-seat="${st.pend[0]}"]`); continue; }
     if (st.phase === "setup") {
       if (st.role === "det") { await snap("setup_det"); await page.click("#bsetrand"); await page.click("#bsetdet"); }
-      else { await snap("setup_thief"); await page.click(Math.random() < 0.5 ? "#bdecY" : "#bdecN"); }
+      else { await snap("setup_thief"); const st0 = await page.$$("[data-tstart]"); await st0[Math.floor(Math.random() * st0.length)].click(); await page.click(Math.random() < 0.5 ? "#bdecY" : "#bdecN"); }
       continue;
     }
     if (st.role === "thief") {
