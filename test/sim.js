@@ -30,7 +30,7 @@ for (let gi = 0; gi < N; gi++) {
     if (!pend.length) { stats.stuck++; console.log("STUCK", g.phase, g.stage, g.turn); break; }
     const pid = pend[0]; const p = E.P(g, pid);
     if (g.phase === "setup") {
-      if (p.det && !p.det.ready) act(g, pid, { kind: "setupDet", k: pick(Array.from({length:64},(_,i)=>64+i).filter(k=>!E.bld(g).starts.includes(k))), skills: Object.keys(E.SKILLS).sort(() => rand() - .5).slice(0, 4) });
+      if (p.det && !p.det.ready) act(g, pid, { kind: "setupDet", k: pick(Array.from({length:64},(_,i)=>64+i).filter(k=>E.detStartOK(g,k))), skills: Object.keys(E.SKILLS).sort(() => rand() - .5).slice(0, 4) });
       else act(g, pid, { kind: "declare", yes: rand() < 0.4, start: pick(E.bld(g).starts) });
       continue;
     }

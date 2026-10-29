@@ -5,7 +5,7 @@
 (function (root) {
 "use strict";
 const E = {};
-E.VERSION = "テスト版 v1.2";
+E.VERSION = "テスト版 v1.3";
 
 /* ---------- 乱数（ゲームごとの種から作る。同じ種＋同じ操作なら同じ結果） ---------- */
 let RNG = null;
@@ -593,12 +593,19 @@ function endDetTurn(g) {
 }
 
 /* ---------- 準備フェーズ ---------- */
+function detStartOK(g, k) {
+  if (!(k >= 64 && k < 128)) return false;
+  if (fixedList(g).includes(k)) return false;
+  if ((g.tr || []).some(t => t.k === k) || (g.parts || []).some(x => x.k === k)) return false;
+  return true;
+}
+E.detStartOK = detStartOK;
 function setupAct(g, p, a) {
   if (a.kind === "setupDet") {
     if (!p.det) return "探偵ではありません";
     if (p.det.ready) return "準備はもう終わっています";
     const k = +a.k; if (!(k >= 64 && k < 128)) return "スタートは2階のマスから選んでください";
-    if (bld(g).starts.includes(k)) return "怪盗のスタート候補（窓）のマスは選べません";
+    if (!detStartOK(g, k)) return "スタートは何もないマスから選んでください（財宝・変装パーツ・階段・窓・屋上階段のマスは選べません）";
     let sk = [];
     if (g.opt.skills) { sk = [...new Set(a.skills || [])].filter(x => SKILLS[x]); if (sk.length !== 4) return "スキルを4つ選んでください"; }
     p.det.k = k; p.det.skills = sk; p.det.ready = true; inspect(g, p);
@@ -721,7 +728,7 @@ function pendingIds(g) {
 function proxyAct(g, pid) {
   const p = P(g, pid); if (!p) return "プレイヤーがいません";
   if (g.phase === "setup") {
-    if (p.det && !p.det.ready) { const sk = shuffle(Object.keys(SKILLS)).slice(0, 4); return setupAct(g, p, { kind: "setupDet", k: 64 + rnd(64), skills: sk }); }
+    if (p.det && !p.det.ready) { const sk = shuffle(Object.keys(SKILLS)).slice(0, 4); const ok = Array.from({ length: 64 }, (_, i) => 64 + i).filter(k => detStartOK(g, k)); return setupAct(g, p, { kind: "setupDet", k: ok[rnd(ok.length)], skills: sk }); }
     if (p.th && p.th.declared == null) { const st = bld(g).starts; return setupAct(g, p, { kind: "declare", yes: false, start: st[rnd(st.length)] }); }
     return null;
   }
