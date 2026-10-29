@@ -527,6 +527,7 @@ function headerHTML(v){
   const stage=v.phase==="play"?(v.stage==="thief"?"怪盗のターン":`探偵のターン（${v.step}回目）`):v.phase==="setup"?"準備":v.phase==="roundEnd"?"ラウンド終了":"ゲーム終了";
   return `<div class="panel"><div class="row"><b class="grow">第${v.round}/${v.rounds}ラウンド ${v.phase==="play"?`・${v.turn}/${v.opt.turns}ターン`:""}・${esc(stage)}</b><span class="pill">${esc(v.building)}</span></div>
   <div class="row sub" style="margin-top:4px">あなた：${me?chip(me.id):""} ${role} ／ 所持金 ${yen(me?me.money:0)}${me&&me.debt?`（借金 ${yen(me.debt)}）`:""} ／ 探偵：${chip(v.detId)}</div>
+  <div class="row sub" style="margin-top:4px;gap:2px 10px">💰 ${v.players.map(p=>`${chip(p.id)} ${yen(p.money-p.debt)}`).join(" ")}</div>
   <div class="row" style="margin-top:4px;gap:4px 10px">${v.players.filter(p=>p.role==="thief").map(p=>`<span class="sub">${chip(p.id)} ${{active:"",captured:"⛓捕縛中",escaped:"🏁脱出",failed:"✖失敗"}[p.status]||""}${p.heliCall!=null?` 🚁${p.heliCall+2}〜${p.heliCall+3}T`:""}${p.declared?" 📜":""}</span>`).join("")}</div>
   ${v.backOpen?`<div class="sub ng" style="margin-top:4px">🚪 裏口が開いています（変装していれば裏口からも脱出できます）</div>`:""}</div>`;
 }
@@ -745,11 +746,12 @@ function renderSide(v){
     if(v.role==="thief")b.push(`<button id="sItems" title="アイテム">🃏<span class="lb">アイテム</span>${v.my&&v.my.items.length?`<span class="badge">${v.my.items.length}</span>`:""}</button>`);
     if(v.role==="det"||v.revealAll)b.push(`<button id="sSkills" title="スキル">🔍<span class="lb">スキル</span></button>`);
   }
+  if(v.phase!=="lobby")b.push(`<button id="sMoney" title="所持金">💰<span class="lb">みんなの所持金</span></button>`);
   b.push(`<button id="sLog" title="記録">📋<span class="lb">記録・ログ</span></button>`);
   b.push(`<button id="sRules" title="ルール">📖<span class="lb">ルール</span></button>`);
   $("#side").innerHTML=b.join("");
   const on=(id,f)=>{const e=document.getElementById(id);if(e)e.onclick=f};
-  on("sNotice",openNotice);on("sItems",openItems);on("sSkills",openSkills);on("sLog",openLog);on("sRules",openRules);
+  on("sNotice",openNotice);on("sMoney",openMoney);on("sItems",openItems);on("sSkills",openSkills);on("sLog",openLog);on("sRules",openRules);
 }
 function dlg(html){const d=$("#dlg");d.innerHTML=html+`<div class="row" style="margin-top:10px"><button id="dclose">閉じる</button></div>`;if(!d.open)d.showModal();$("#dclose").onclick=()=>d.close();return d}
 function openNotice(){
@@ -760,6 +762,12 @@ function openNotice(){
   h+=`<b>公開されている予告状</b>${open.length?open.map(p=>`<div class="card notice">${chip(p.id)} ${p.declared?"（予告）":"（伏せていた）"}${p.noticeOK!=null?(p.noticeOK?" <span class='ok'>達成</span>":" <span class='ng'>未達成</span>"):""}<br><b>${esc(E.NOTICES[p.notice].name)}</b><div>${esc(E.NOTICES[p.notice].text)}</div></div>`).join(""):`<div class="sub">まだありません</div>`}`;
   h+=`<div class="sub">予告状は、財宝を持って脱出したときだけ達成になります。予告あり ${yen(E.MONEY.noticeOpen)}／予告なし ${yen(E.MONEY.noticeHidden)}。</div>`;
   dlg(h);
+}
+function openMoney(){
+  const v=V();const rank=v.players.map(p=>({p,net:p.money-p.debt})).sort((a,b)=>b.net-a.net||b.p.totalDet-a.p.totalDet);
+  dlg(`<h2 style="margin-top:0">💰 みんなの所持金</h2><table><tr><th></th><th>名前</th><th class="n">所持金</th><th class="n">探偵での稼ぎ</th></tr>
+  ${rank.map((r,i)=>`<tr><td>${i+1}位</td><td style="white-space:nowrap">${chip(r.p.id)}${r.p.role==="det"?" 🕵":""}</td><td class="n" style="white-space:nowrap"><b>${yen(r.net)}</b>${r.p.debt?`<br><small class="ng">借金 ${yen(r.p.debt)}込み</small>`:""}</td><td class="n" style="white-space:nowrap">${yen(r.p.totalDet)}</td></tr>`).join("")}</table>
+  <div class="sub">所持金は借金を差し引いた額です。お金が動くのはラウンドの終わり（山分け・ボーナス・保釈金・報奨金）です。同点なら探偵ラウンドの稼ぎが多い人が上です。</div>`);
 }
 function openItems(){
   const v=V();const my=v.my;if(!my)return;
