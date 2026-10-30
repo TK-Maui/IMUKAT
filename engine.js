@@ -5,7 +5,7 @@
 (function (root) {
 "use strict";
 const E = {};
-E.VERSION = "テスト版 v1.7";
+E.VERSION = "テスト版 v1.8";
 
 /* ---------- 乱数（ゲームごとの種から作る。同じ種＋同じ操作なら同じ結果） ---------- */
 let RNG = null;
@@ -224,10 +224,10 @@ function startThiefTurn(g) {
   for (const p of thieves(g)) {
     const th = p.th;
     if (th.status === "captured" && th.rel >= th.relNeed) {
-      th.status = "active"; th.rel = 0; th.relNeed = 2;
+      th.status = "active"; th.rel = 0; th.relNeed = 2; th.safeT = g.turn; th.safeK = th.k;
       const by = th.relBy[th.relBy.length - 1]; const rp = P(g, by); if (rp) rp.th.rescues++;
       log(g, "all", `${p.name}が解放されました（${nm(th.k)}）`); alog(g, by, "解放の完了", { detail: p.name, to: nm(th.k) });
-      note(g, p.id, "🔓", "解放された！このターンから動けます", [`場所：${nm(th.k)}`], "good");
+      note(g, p.id, "🔓", "解放された！このターンから動けます", [`場所：${nm(th.k)}`, "このターンは、このマスにいる限り探偵と同じマスでも捕まりません"], "good");
       note(g, by, "🔓", `${p.name}の解放に成功！`, [`救出ボーナス +${MONEY.rescue}万円`], "good");
       th.relBy = [];
     }
@@ -280,10 +280,10 @@ function thiefAct(g, p, a) {
     if (it === "rope") {
       if (th.status !== "captured") return "縄抜けは捕縛されているときだけ使えます";
       th.items.splice(i, 1); th.stats.items++;
-      th.status = "active"; th.rel = 0; th.relNeed = 2; th.relBy = [];
+      th.status = "active"; th.rel = 0; th.relNeed = 2; th.relBy = []; th.safeT = g.turn; th.safeK = th.k;
       th.tp = { done: false, roll: null, stay: false, dest: null, use: {} };
       log(g, "all", `${p.name}が縄抜けで自力で抜け出しました（${nm(th.k)}）`); alog(g, p.id, "アイテム", { detail: ITEMS[it].name, from: nm(th.k) });
-      note(g, p.id, "🪢", "縄抜け成功！このターンから動けます", [], "good");
+      note(g, p.id, "🪢", "縄抜け成功！このターンから動けます", ["このターンは、このマスにいる限り探偵と同じマスでも捕まりません"], "good");
       return null;
     }
     if (th.status !== "active") return "今はそのアイテムを使えません";
@@ -376,6 +376,9 @@ function note(g, to, icon, title, lines, tone) {
 E.note = note;
 const partsLine = th => "変装パーツ：" + PART_KEYS.map(t => `${PARTS[t]}${(th.parts[t] || 0) > 0 ? "✓" : "—"}`).join("・");
 
+// 縄抜け・解放されたターンは、探偵と同じマス（捕まっていたマス）にいる限り捕まらない
+function isSafe(g, p) { const th = p.th; return th && th.safeT === g.turn && th.safeK === th.k; }
+E.isSafe = isSafe;
 function capture(g, p, why, dk) {
   const th = p.th; const d = det(g);
   th.status = "captured"; th.rel = 0; th.relNeed = 2; th.relBy = []; th.pendingRecv = null;
@@ -432,7 +435,10 @@ function resolveThieves(g) {
       note(g, p.id, "🧩", `変装パーツ「${PARTS[pt.type]}」を拾った`, [partsLine(th), have >= g.opt.partsNeed ? "変装の準備完了！正面ゲートに止まれば脱出できます" : `あと${g.opt.partsNeed - have}種類`], "good"); }
   }
   // 鉢合わせ
-  for (const p of ts) if (p.th.status === "active" && d.k === p.th.k) capture(g, p, "meet", d.k);
+  for (const p of ts) if (p.th.status === "active" && d.k === p.th.k) {
+    if (isSafe(g, p)) { note(g, p.id, "🛡", "探偵と同じマスにいたが、抜け出したばかりなので捕まらなかった", [`場所：${nm(p.th.k)}`, "次のターンからは捕まるので離れましょう"], "info"); alog(g, p.id, "捕縛を免れた", { detail: "鉢合わせ", to: nm(p.th.k) }); continue; }
+    capture(g, p, "meet", d.k);
+  }
   // 行動
   for (const p of ts) {
     const th = p.th, tp = th.tp; if (th.status !== "active") continue;
@@ -481,7 +487,9 @@ function resolveThieves(g) {
   }
   // 張り込み
   if (d.ambush != null) {
-    const hitA = ts.filter(p => p.th.status === "active" && dist(p.th.k, d.ambush) <= 1);
+    const inA = ts.filter(p => p.th.status === "active" && dist(p.th.k, d.ambush) <= 1);
+    const hitA = inA.filter(p => !(isSafe(g, p) && p.th.k === d.ambush));
+    inA.filter(p => !hitA.includes(p)).forEach(p => { note(g, p.id, "🛡", "張り込みの探偵と同じマスにいたが、抜け出したばかりなので捕まらなかった", [`場所：${nm(p.th.k)}`], "info"); alog(g, p.id, "捕縛を免れた", { detail: "張り込み", to: nm(p.th.k) }); });
     hitA.forEach(p => capture(g, p, "ambush", d.ambush));
     if (!hitA.length) note(g, g.detId, "💨", "張り込みは空振り", [`${nm(d.ambush)} とその上下左右に怪盗はいませんでした`], "bad");
     d.ambush = null;
@@ -559,10 +567,14 @@ function detAct(g, p, a) {
       return endDetTurn(g);
     }
     if (act === "capture") {
-      const hit = thieves(g).filter(q => q.th.status === "active" && targets.includes(q.th.k));
+      const inT = thieves(g).filter(q => q.th.status === "active" && targets.includes(q.th.k));
+      const safe = inT.filter(q => isSafe(g, q) && q.th.k === d.k);
+      const hit = inT.filter(q => !safe.includes(q));
+      safe.forEach(q => { note(g, q.id, "🛡", "探偵に捕縛されそうになったが、抜け出したばかりなので捕まらなかった", [`場所：${nm(q.th.k)}`, "次のターンからは捕まるので離れましょう"], "info"); alog(g, q.id, "捕縛を免れた", { detail: "探偵の捕縛", to: nm(q.th.k) }); });
+      if (safe.length && !hit.length) note(g, p.id, "🛡", `${safe.map(q => q.name).join("・")}は抜け出したばかりなので、このターンは捕まえられない`, ["縄抜け・解放されたターンは、探偵と同じマスにいても捕まりません", ...insp], "bad");
       if (g.opt.capture === "near2") g.searchMarks.push({ k: targets[0], t: g.turn });
       if (hit.length) { hit.forEach(q => capture(g, q, "det", d.k)); note(g, p.id, "🎯", `捕縛成功！${hit.map(q => q.name).join("・")}を捕まえた`, [`場所：${[...new Set(hit.map(q => nm(q.th.k)))].join("・")}`, ...insp], "good"); }
-      else { log(g, "det", `${targets.map(nm).join("・")} には誰もいませんでした`); note(g, p.id, "💨", "空振り…誰もいなかった", [`調べたマス：${targets.map(nm).join("・")}`, ...insp], "bad"); }
+      else if (!safe.length) { log(g, "det", `${targets.map(nm).join("・")} には誰もいませんでした`); note(g, p.id, "💨", "空振り…誰もいなかった", [`調べたマス：${targets.map(nm).join("・")}`, ...insp], "bad"); }
       alog(g, p.id, "捕縛", { to: targets.map(nm).join("・"), result: hit.length ? hit.map(q => q.name).join("・") : "空振り" });
     } else if (act === "ambush") {
       d.ambush = d.k; log(g, "det", `${nm(d.k)} で張り込みを始めました（次の怪盗のターン終了時、上下左右1マスにいる怪盗も捕縛）`); alog(g, p.id, "張り込み", { to: nm(d.k) });
@@ -816,7 +828,7 @@ function viewFor(g, pid) {
   if (isTh) v.thieves = thieves(g).map(p => ({ id: p.id, k: p.th.k, status: p.th.status, loot: p.th.loot, parts: p.th.parts, heliCall: p.th.heliCall,
     tp: p.th.tp ? { done: p.th.tp.done, roll: p.th.tp.roll, dest: p.th.tp.dest, act: p.th.tp.act || null } : null, escHow: p.th.escHow, escTurn: p.th.escTurn }));
   if (isDet && det(g)) { const d = det(g).det; v.det = { k: d.k, skills: d.skills, cd: d.cd, ready: d.ready, ambush: d.ambush, tp: d.tp || null, net: d.net, sprint: d.sprint, blackout: d.blackout, info: d.info.slice(-30), devices: g.devices, captured: d.captured }; }
-  if (role === "thief") { const th = me.th; v.my = { items: th.items, notice: th.notice, declared: th.declared, tp: th.tp, k: th.k, status: th.status, options: th.tp && th.tp.dest != null ? thiefOptions(g, me, th.tp.dest) : [] }; }
+  if (role === "thief") { const th = me.th; v.my = { safe: isSafe(g, me), items: th.items, notice: th.notice, declared: th.declared, tp: th.tp, k: th.k, status: th.status, options: th.tp && th.tp.dest != null ? thiefOptions(g, me, th.tp.dest) : [] }; }
   if (reveal) { v.revealAll = true; v.alogN = g.alog.length; }
   return v;
 }

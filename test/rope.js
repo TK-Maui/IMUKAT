@@ -48,4 +48,47 @@ function allCapturedInDetTurn(g, d, ts) {
   ts.forEach(p => E.safeApply(g, p.id, { kind: "confirm" }));
   check(g.phase === "roundEnd", "怪盗のターン終了時に終わらない: " + g.phase);
 }
+// 3) 縄抜けしたターンは、探偵と同じマスにいても捕まらない（鉢合わせ・探偵の捕縛とも）。次のターンは捕まる
+{
+  const { g, d, ts } = setup(ts => ts[0].id);
+  // ts[0]だけ捕縛、ほかは遠くで動ける状態にする
+  ts.forEach(p => { E.safeApply(g, p.id, { kind: "stay" }); E.safeApply(g, p.id, { kind: "confirm", act: "none" }); });
+  const k = ts[0].th.k; d.det.k = k; ts[1].th.k = (k + 40) % 128; ts[2].th.k = (k + 50) % 128;
+  E.safeApply(g, d.id, { kind: "stay" }); E.safeApply(g, d.id, { kind: "act", act: "capture" });
+  check(ts[0].th.status === "captured", "準備：捕縛されていない");
+  E.safeApply(g, d.id, { kind: "stay" }); E.safeApply(g, d.id, { kind: "act", act: "pass" });
+  check(g.stage === "thief", "怪盗のターンにならない");
+  E.safeApply(g, ts[0].id, { kind: "useItem", item: "rope" });
+  E.safeApply(g, ts[0].id, { kind: "stay" }); E.safeApply(g, ts[0].id, { kind: "confirm", act: "none" });
+  ts.slice(1).forEach(p => { E.safeApply(g, p.id, { kind: "stay" }); E.safeApply(g, p.id, { kind: "confirm", act: "none" }); });
+  check(ts[0].th.status === "active", "縄抜けしたターンに鉢合わせで捕まった");
+  check(E.viewFor(g, ts[0].id).notes.some(n => /捕まらなかった/.test(n.title)), "免れた通知がない");
+  E.safeApply(g, d.id, { kind: "stay" }); E.safeApply(g, d.id, { kind: "act", act: "capture" });
+  check(ts[0].th.status === "active", "縄抜けしたターンに探偵の捕縛で捕まった");
+  check(E.viewFor(g, d.id).notes.some(n => /抜け出したばかり/.test(n.title)), "探偵に理由の通知がない");
+  check(g.stage === "det" && g.step === 2, "探偵の2回目に進まない");
+  E.safeApply(g, d.id, { kind: "stay" }); E.safeApply(g, d.id, { kind: "act", act: "pass" });
+  // 次のターン：同じマスに留まると鉢合わせで捕まる
+  E.safeApply(g, ts[0].id, { kind: "stay" }); E.safeApply(g, ts[0].id, { kind: "confirm", act: "none" });
+  ts.slice(1).forEach(p => { E.safeApply(g, p.id, { kind: "stay" }); E.safeApply(g, p.id, { kind: "confirm", act: "none" }); });
+  check(ts[0].th.status === "captured", "次のターンなのに捕まらない");
+}
+// 4) 仲間に解放されたターンも同じ
+{
+  const { g, d, ts } = setup(null);
+  ts.forEach(p => { E.safeApply(g, p.id, { kind: "stay" }); E.safeApply(g, p.id, { kind: "confirm", act: "none" }); });
+  const k = ts[0].th.k; d.det.k = k; ts[1].th.k = (k + 40) % 128; ts[2].th.k = (k + 50) % 128;
+  E.safeApply(g, d.id, { kind: "stay" }); E.safeApply(g, d.id, { kind: "act", act: "capture" });
+  E.safeApply(g, d.id, { kind: "stay" }); E.safeApply(g, d.id, { kind: "act", act: "pass" });
+  ts[0].th.rel = 2; // 解放作業がそろった状態にして、次のターンの始めに解放
+  d.det.k = k;
+  E.safeApply(g, ts[0].id, { kind: "confirm" }); ts.slice(1).forEach(p => { E.safeApply(g, p.id, { kind: "stay" }); E.safeApply(g, p.id, { kind: "confirm", act: "none" }); });
+  E.safeApply(g, d.id, { kind: "stay" }); E.safeApply(g, d.id, { kind: "act", act: "pass" });
+  E.safeApply(g, d.id, { kind: "stay" }); E.safeApply(g, d.id, { kind: "act", act: "pass" });
+  check(ts[0].th.status === "active", "解放されていない: " + ts[0].th.status);
+  E.safeApply(g, ts[0].id, { kind: "stay" }); E.safeApply(g, ts[0].id, { kind: "confirm", act: "none" });
+  ts.slice(1).forEach(p => { E.safeApply(g, p.id, { kind: "stay" }); E.safeApply(g, p.id, { kind: "confirm", act: "none" }); });
+  check(ts[0].th.status === "active", "解放されたターンに鉢合わせで捕まった");
+  // 動いて別のマスで捕まるのは通常どおり
+}
 console.log(`rope test: ok ${ok} / ng ${ng}`); process.exit(ng ? 1 : 0);

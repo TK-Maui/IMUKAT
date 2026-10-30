@@ -696,7 +696,7 @@ function thiefPanel(v){
   S.ui.mapOpt={};
   let h=`<div class="panel me">`;
   const partsN=E.PART_KEYS.filter(t=>(me.parts[t]||0)>0).length;
-  h+=`<div class="stat"><div>現在地 <b>${E.nm(me.k)}</b></div><div>財宝 <b>${me.loot.length?me.loot.map(id=>esc(v.tr.find(t=>t.id===id).name)).join("・"):"なし"}</b></div><div>変装パーツ <b>${partsN}/${v.opt.partsNeed}</b>${partsN>=v.opt.partsNeed?" ✅":""}</div><div>ヘリ <b>${me.heliCall==null?"未使用":`${me.heliCall+2}〜${me.heliCall+3}ターン目`}</b></div></div>${partsHTML(me.parts,v.opt.partsNeed)}`;
+  h+=`<div class="stat"><div>現在地 <b>${E.nm(me.k)}</b></div><div>財宝 <b>${me.loot.length?me.loot.map(id=>esc(v.tr.find(t=>t.id===id).name)).join("・"):"なし"}</b></div><div>変装パーツ <b>${partsN}/${v.opt.partsNeed}</b>${partsN>=v.opt.partsNeed?" ✅":""}</div><div>ヘリ <b>${me.heliCall==null?"未使用":`${me.heliCall+2}〜${me.heliCall+3}ターン目`}</b></div></div>${partsHTML(me.parts,v.opt.partsNeed)}${my.safe?`<div class="sub ok" style="margin-top:6px">🛡 抜け出したばかり：このターンは、${E.nm(me.k)} にいる限り探偵と同じマスでも捕まりません（動くと通常どおり）</div>`:""}`;
   if(v.stage!=="thief"){h+=`<div style="margin-top:8px">探偵のターンです。待っています…</div></div>`;return h+teamHTML(v)}
   if(me.status==="escaped"){h+=`<div style="margin-top:8px">🏁 脱出しました。ラウンドの終わりを待っています。</div></div>`;return h}
   if(me.status==="captured"){
