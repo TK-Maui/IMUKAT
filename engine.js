@@ -5,7 +5,7 @@
 (function (root) {
 "use strict";
 const E = {};
-E.VERSION = "テスト版 v1.9";
+E.VERSION = "テスト版 v1.10";
 
 /* ---------- 乱数（ゲームごとの種から作る。同じ種＋同じ操作なら同じ結果） ---------- */
 let RNG = null;
@@ -96,7 +96,7 @@ const SKILLS = {
 E.TR = TR; E.PARTS = PARTS; E.PART_KEYS = PART_KEYS; E.NOTICES = NOTICES; E.ITEMS = ITEMS; E.SKILLS = SKILLS;
 const PCOL = ["#2f6fd6", "#d1495b", "#2a9d6f", "#c98b12", "#8e5cc4", "#1e9aa8"];
 E.PCOL = PCOL;
-const MONEY = { bail: 100, endCap: 300, capture: 100, capMax: 2, failed: 150, block: 200, noticeOpen: 600, noticeHidden: 200, rescue: 200, flair: [300, 200, 100] };
+const MONEY = { bail: 100, endCap: 300, capture: 100, capMax: 2, failed: 100, block: 200, noticeOpen: 600, noticeHidden: 200, rescue: 200, flair: [300, 200, 100] };
 E.MONEY = MONEY;
 
 function defaultOpt() {
