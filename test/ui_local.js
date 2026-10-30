@@ -16,7 +16,9 @@ const BASE = process.env.BASE || "http://127.0.0.1:8765/";
   await page.click("#bstart");
   let shots = 0, loops = 0;
   const snap = async n => { if (shots < 12) { await page.screenshot({ path: `test/shot_${n}.png`, fullPage: true }); shots++; } };
+  let notes = 0;
   while (loops++ < 3000) {
+    if (await page.$("#bnoteok")) { notes++; if (notes <= 3) await snap("note" + notes); await page.click("#bnoteok"); continue; }
     const st = await page.evaluate(() => { const v = __S.view; return { phase: v.phase, stage: v.stage, pend: v.pending, seat: __S.seat, role: v.role, turn: v.turn, round: v.round }; });
     if (st.phase === "end") break;
     if (st.phase === "roundEnd") { await snap("roundend" + st.round); await page.click("#bnext"); continue; }
@@ -55,6 +57,6 @@ const BASE = process.env.BASE || "http://127.0.0.1:8765/";
   const p = await dl.path(); const fs = require("fs"); const csv = fs.readFileSync(p, "utf8");
   console.log("actions.csv lines:", csv.split("\n").length, csv.split("\n")[0].slice(0, 120));
   await page.screenshot({ path: "test/shot_log.png", fullPage: true });
-  console.log("loops", loops, "errors", errs.length); errs.slice(0, 10).forEach(e => console.log(e));
+  console.log("notes", notes, "loops", loops, "errors", errs.length); errs.slice(0, 10).forEach(e => console.log(e));
   await browser.close();
 })();

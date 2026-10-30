@@ -98,6 +98,24 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 .stat div{background:var(--bg);border-radius:8px;padding:6px 8px;font-size:13px}
 .big{font-size:22px;font-weight:800;letter-spacing:2px}
 .ok{color:var(--ok)} .ng{color:var(--warn)}
+/* 結果のポップアップ */
+#notebox{position:fixed;inset:0;z-index:60;display:flex;align-items:flex-start;justify-content:center;padding:70px 16px 16px;background:rgba(0,0,0,.35)}
+#notebox .nwrap{width:min(440px,100%);display:flex;flex-direction:column;gap:8px;max-height:calc(100vh - 90px);overflow:auto}
+.ncard{background:var(--panel);border:1px solid var(--line);border-left:6px solid var(--accent);border-radius:12px;padding:12px 14px;box-shadow:0 8px 24px rgba(0,0,0,.25);animation:npop .18s ease-out}
+.ncard.good{border-left-color:var(--ok)}.ncard.bad{border-left-color:var(--warn)}
+.ncard .nt{display:flex;gap:10px;align-items:center;font-weight:800;font-size:17px}
+.ncard .ni{font-size:28px;line-height:1}
+.ncard ul{margin:6px 0 0;padding-left:18px;font-size:14px}
+.ncard .nm{font-size:11px;color:var(--sub);margin-top:4px}
+#notebox .nok{width:100%;margin-top:2px}
+@keyframes npop{from{transform:translateY(-8px) scale(.97);opacity:0}to{transform:none;opacity:1}}
+@media (prefers-reduced-motion: reduce){.ncard{animation:none}}
+/* 変装パーツ */
+.parts{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+.partchip{font-size:12px;padding:2px 8px;border-radius:99px;border:1px dashed var(--line);color:var(--sub)}
+.partchip.on{border:1px solid var(--part);background:color-mix(in srgb,var(--part) 16%,var(--panel));color:var(--ink);font-weight:700}
+.partchip.on:before{content:"✓ "}
+.partchip.dup:after{content:attr(data-n)}
 </style>
 </head>
 <body>
@@ -508,6 +526,25 @@ function renderTitle(){
   $("#brules_full").onclick=()=>openRules("full");
 }
 
+/* ---------- 結果のポップアップ ---------- */
+function seenKey(){return `imukat_seen_${S.code||""}_${V()&&V().gid||""}_${V()&&V().me||""}`}
+function seenSet(){const k=seenKey();S._seen=S._seen||{};if(!S._seen[k]){let a=[];try{a=JSON.parse(localStorage.getItem(k)||"[]")}catch(e){}S._seen[k]=new Set(a)}return S._seen[k]}
+function markSeen(ids){const k=seenKey();const st=seenSet();ids.forEach(i=>st.add(i));try{localStorage.setItem(k,JSON.stringify([...st].slice(-200)))}catch(e){}}
+function showNotes(){
+  const v=V();let box=document.getElementById("notebox");
+  if(!v||!v.notes||!(v.phase==="play"||v.phase==="roundEnd")){if(box)box.remove();return}
+  const st=seenSet();const fresh=v.notes.filter(n=>!st.has(n.id));
+  if(!fresh.length){if(box)box.remove();return}
+  if(!box){box=document.createElement("div");box.id="notebox";document.body.appendChild(box)}
+  const allIds=fresh.map(n=>n.id);
+  const show=fresh.slice(-6);const sig=show.map(n=>n.id).join(",");
+  if(box.dataset.sig===sig)return;box.dataset.sig=sig;
+  box.innerHTML=`<div class="nwrap" role="alertdialog" aria-label="行動の結果">${show.map(n=>`<div class="ncard ${n.tone}"><div class="nt"><span class="ni">${n.icon}</span><span>${esc(n.title)}</span></div>${n.lines.length?`<ul>${n.lines.map(l=>`<li>${esc(l)}</li>`).join("")}</ul>`:""}<div class="nm">${n.t}ターン目</div></div>`).join("")}<button class="primary nok" id="bnoteok">OK</button></div>`;
+  const close=()=>{markSeen(allIds);box.remove()};
+  document.getElementById("bnoteok").onclick=close;
+  box.onclick=e=>{if(e.target===box)close()};
+}
+
 function render(){
   const v=V();if(!v){renderTitle();return}
   let h=`<div class="row"><h1 class="grow">IMUKAT <span class="sub">${esc(VERSION)}</span></h1><span class="sub">${S.mode==="local"?"1台モード":"部屋 "+esc(S.code)}</span></div>`;
@@ -527,6 +564,7 @@ function render(){
   $("#app").innerHTML=h;
   renderSide(v);
   bind();
+  try{showNotes()}catch(e){console.error(e)}
 }
 function headerHTML(v){
   const me=pl(v.me);
@@ -649,17 +687,22 @@ function renderPlay(v){
   return h;
 }
 function myThief(v){return (v.thieves||[]).find(t=>t.id===v.me)}
+function partsHTML(parts,need,small){
+  const n=E.PART_KEYS.filter(t=>(parts[t]||0)>0).length;
+  return `<div class="parts" ${small?'style="margin-top:2px"':""}>${E.PART_KEYS.map(t=>{const c=parts[t]||0;return `<span class="partchip ${c>0?"on":""} ${c>1?"dup":""}" data-n=" ×${c}">${esc(E.PARTS[t])}</span>`}).join("")}${!small&&n>=need?`<span class="sub ok" style="align-self:center">✅ 変装できます</span>`:""}</div>`;
+}
 function thiefPanel(v){
   const me=myThief(v);const my=v.my;const tp=my.tp;
   S.ui.mapOpt={};
   let h=`<div class="panel me">`;
   const partsN=E.PART_KEYS.filter(t=>(me.parts[t]||0)>0).length;
-  h+=`<div class="stat"><div>現在地 <b>${E.nm(me.k)}</b></div><div>財宝 <b>${me.loot.length?me.loot.map(id=>esc(v.tr.find(t=>t.id===id).name)).join("・"):"なし"}</b></div><div>変装パーツ <b>${partsN}/${v.opt.partsNeed}</b>${partsN>=v.opt.partsNeed?" ✅":""}</div><div>ヘリ <b>${me.heliCall==null?"未使用":`${me.heliCall+2}〜${me.heliCall+3}ターン目`}</b></div></div>`;
+  h+=`<div class="stat"><div>現在地 <b>${E.nm(me.k)}</b></div><div>財宝 <b>${me.loot.length?me.loot.map(id=>esc(v.tr.find(t=>t.id===id).name)).join("・"):"なし"}</b></div><div>変装パーツ <b>${partsN}/${v.opt.partsNeed}</b>${partsN>=v.opt.partsNeed?" ✅":""}</div><div>ヘリ <b>${me.heliCall==null?"未使用":`${me.heliCall+2}〜${me.heliCall+3}ターン目`}</b></div></div>${partsHTML(me.parts,v.opt.partsNeed)}`;
   if(v.stage!=="thief"){h+=`<div style="margin-top:8px">探偵のターンです。待っています…</div></div>`;return h+teamHTML(v)}
   if(me.status==="escaped"){h+=`<div style="margin-top:8px">🏁 脱出しました。ラウンドの終わりを待っています。</div></div>`;return h}
   if(me.status==="captured"){
     h+=`<div style="margin-top:8px">⛓ 捕縛されています。仲間がこのマスで解放作業をすると抜け出せます（${pl(v.me).rel||0}/${pl(v.me).relNeed}）。</div>`;
-    if(my.items.includes("rope"))h+=`<div class="row" style="margin-top:6px"><button class="primary" data-use="rope">縄抜けを使う</button>${tp&&!tp.done?`<button id="bconf">このターンは待つ</button>`:""}</div>`;
+    const rp=my.items.includes("rope");
+    if(rp||(tp&&!tp.done))h+=`<div class="row" style="margin-top:6px">${rp?`<button class="primary" data-use="rope">🪢 縄抜けを使う</button>`:""}${tp&&!tp.done?`<button id="bconf">このターンは待つ</button>`:""}</div>`;
     return h+`</div>`+teamHTML(v);
   }
   if(!tp){return h+`</div>`}
@@ -699,7 +742,7 @@ function exitHint(v,me,k){
   return "";
 }
 function teamHTML(v){
-  return `<div class="panel"><b>怪盗チーム（共有マップ）</b><table>${v.thieves.map(t=>`<tr><td>${chip(t.id)}</td><td>${E.nm(t.k)}</td><td>${{active:t.tp?(t.tp.done?"✅確定":"考え中"):"",captured:"⛓捕縛中",escaped:"🏁脱出",failed:"✖失敗"}[t.status]}</td><td class="sub">${t.loot.map(id=>esc(v.tr.find(x=>x.id===id).name)).join("・")}${E.PART_KEYS.filter(x=>(t.parts[x]||0)>0).map(x=>({uniform:"服",mask:"面",badge:"証",baton:"棒"}[x])).join("")}</td></tr>`).join("")}</table>
+  return `<div class="panel"><b>怪盗チーム（共有マップ）</b><table>${v.thieves.map(t=>`<tr><td>${chip(t.id)}</td><td>${E.nm(t.k)}</td><td>${{active:t.tp?(t.tp.done?"✅確定":"考え中"):"",captured:"⛓捕縛中",escaped:"🏁脱出",failed:"✖失敗"}[t.status]}</td><td class="sub">${t.loot.map(id=>esc(v.tr.find(x=>x.id===id).name)).join("・")}${partsHTML(t.parts,v.opt.partsNeed,true)}</td></tr>`).join("")}</table>
   <div class="sub">財宝のセキュリティ：${v.tr.filter(t=>!t.taken).map(t=>`${esc(t.name)}（${E.nm(t.k)}）${t.stage}/${t.need}段・失敗${t.fails}${t.alarm?"🚨":""}`).join("／")}</div>${v.floorHint?`<div class="sub">盗聴器：探偵は${v.floorHint.t}ターン目の終わりに${v.floorHint.f+1}階にいた</div>`:""}</div>`;
 }
 function detPanel(v){

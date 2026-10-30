@@ -5,7 +5,7 @@
 (function (root) {
 "use strict";
 const E = {};
-E.VERSION = "テスト版 v1.6";
+E.VERSION = "テスト版 v1.7";
 
 /* ---------- 乱数（ゲームごとの種から作る。同じ種＋同じ操作なら同じ結果） ---------- */
 let RNG = null;
@@ -91,7 +91,7 @@ const SKILLS = {
   seize: { name: "証拠押収", ct: 2, text: "捕縛中の怪盗を1人選ぶ。その怪盗の解放に必要な作業が1ターン分増える", target: "captured" },
   jump: { name: "階段跳び", ct: 2, text: "今いるマスの真上か真下のマスへ移動する（移動力を使わない。サイコロを振る前に使う）" },
   secure: { name: "セキュリティ強化", ct: 0, text: "財宝のマスにいるとき、その財宝の解除段階を1つ増やす（1つの財宝につき1ラウンド1回）。使うと探偵の位置が全員に分かる" },
-  alarmdev: { name: "警報器", ct: 3, text: "今いるマスに警報器を仕掛ける（怪盗には見えない）。怪盗がそのマスに止まると、探偵に知らされる" },
+  alarmdev: { name: "警報器", ct: 3, text: "今いるマスに警報器を仕掛ける（怪盗には見えない）。怪盗がそのマスに止まると、探偵に知らされる（踏んだ怪盗にも分かる）" },
 };
 E.TR = TR; E.PARTS = PARTS; E.PART_KEYS = PART_KEYS; E.NOTICES = NOTICES; E.ITEMS = ITEMS; E.SKILLS = SKILLS;
 const PCOL = ["#2f6fd6", "#d1495b", "#2a9d6f", "#c98b12", "#8e5cc4", "#1e9aa8"];
@@ -214,6 +214,8 @@ function startThiefTurn(g) {
       if (th.status === "active" && c && c.th.status === "captured" && c.th.k === th.k && c.th.loot.length) {
         th.loot.push(...c.th.loot); c.th.loot.forEach(id => { g.tr.find(t => t.id === id).holder = p.id; });
         log(g, "th", `${p.name}が ${c.name} から財宝を受け取りました`); alog(g, p.id, "財宝の受け取り完了", { detail: c.th.loot.join(",") });
+        note(g, p.id, "💎", `${c.name}から財宝を受け取った`, [c.th.loot.map(id => g.tr.find(t => t.id === id).name).join("・")], "good");
+        note(g, c.id, "🤝", `${p.name}が財宝を受け取った`, [], "info");
         c.th.loot = [];
       }
       th.pendingRecv = null;
@@ -225,17 +227,19 @@ function startThiefTurn(g) {
       th.status = "active"; th.rel = 0; th.relNeed = 2;
       const by = th.relBy[th.relBy.length - 1]; const rp = P(g, by); if (rp) rp.th.rescues++;
       log(g, "all", `${p.name}が解放されました（${nm(th.k)}）`); alog(g, by, "解放の完了", { detail: p.name, to: nm(th.k) });
+      note(g, p.id, "🔓", "解放された！このターンから動けます", [`場所：${nm(th.k)}`], "good");
+      note(g, by, "🔓", `${p.name}の解放に成功！`, [`救出ボーナス +${MONEY.rescue}万円`], "good");
       th.relBy = [];
     }
   }
   for (const p of thieves(g)) {
     const h = p.th.heliCall;
-    if (h != null && g.turn === h + 2 && p.th.status === "active") log(g, "all", `${p.name}のヘリが屋上に到着しました（${h + 3}ターン目の終わりまで待機）`);
+    if (h != null && g.turn === h + 2 && p.th.status === "active") { log(g, "all", `${p.name}のヘリが屋上に到着しました（${h + 3}ターン目の終わりまで待機）`); note(g, p.id, "🚁", "ヘリが屋上に到着！", [`${h + 3}ターン目の終わりまで、屋上階段（${bld(g).roof.map(nm).join("・")}）にいれば脱出できます`], "info"); }
   }
   for (const p of thieves(g)) {
     const th = p.th;
     if (th.status === "active") th.tp = { done: false, roll: null, stay: false, dest: null, use: {} };
-    else if (th.status === "captured") th.tp = { done: !(th.items.includes("rope")), roll: null, stay: true, dest: th.k, use: {}, captured: true };
+    else if (th.status === "captured") th.tp = { done: !(th.items.includes("rope")) && thieves(g).some(q => q.th.status === "active"), roll: null, stay: true, dest: th.k, use: {}, captured: true };
     else th.tp = null;
   }
   checkThiefDone(g);
@@ -279,6 +283,7 @@ function thiefAct(g, p, a) {
       th.status = "active"; th.rel = 0; th.relNeed = 2; th.relBy = [];
       th.tp = { done: false, roll: null, stay: false, dest: null, use: {} };
       log(g, "all", `${p.name}が縄抜けで自力で抜け出しました（${nm(th.k)}）`); alog(g, p.id, "アイテム", { detail: ITEMS[it].name, from: nm(th.k) });
+      note(g, p.id, "🪢", "縄抜け成功！このターンから動けます", [], "good");
       return null;
     }
     if (th.status !== "active") return "今はそのアイテムを使えません";
@@ -358,6 +363,19 @@ function checkThiefDone(g) {
   const all = thieves(g).filter(p => p.th.tp);
   if (all.every(p => p.th.tp.done)) resolveThieves(g);
 }
+/* ---------- 結果の通知（行動した本人だけにポップアップで見せる） ---------- */
+let _nid = 0;
+function note(g, to, icon, title, lines, tone) {
+  g.notes = g.notes || [];
+  const ids = (Array.isArray(to) ? to : [to]).filter(Boolean);
+  if (!ids.length) return;
+  _nid = (_nid + 1) % 1e6;
+  g.notes.push({ id: Date.now().toString(36) + "-" + _nid + "-" + Math.floor(Math.random() * 1e6).toString(36), to: ids, r: g.round, t: g.turn, icon, title, lines: (lines || []).filter(Boolean), tone: tone || "info" });
+  if (g.notes.length > 120) g.notes = g.notes.slice(-120);
+}
+E.note = note;
+const partsLine = th => "変装パーツ：" + PART_KEYS.map(t => `${PARTS[t]}${(th.parts[t] || 0) > 0 ? "✓" : "—"}`).join("・");
+
 function capture(g, p, why, dk) {
   const th = p.th; const d = det(g);
   th.status = "captured"; th.rel = 0; th.relNeed = 2; th.relBy = []; th.pendingRecv = null;
@@ -368,6 +386,11 @@ function capture(g, p, why, dk) {
   if (why === "disguise") g.reveals.push({ r: g.round, t: g.turn, text: `探偵は ${nm(th.k)} から2マス以内にいた` });
   else g.reveals.push({ r: g.round, t: g.turn, k: dk != null ? dk : d.det.k, text: `探偵は ${nm(dk != null ? dk : d.det.k)} にいた` });
   alog(g, p.id, "捕縛された", { detail: why, to: nm(th.k), result: `探偵=${nm(d.det.k)}` });
+  const lossT = th.loot.length ? `持っている財宝（${th.loot.map(id => g.tr.find(t => t.id === id).name).join("・")}）は、仲間が受け取らないと山分けに入りません` : "";
+  note(g, p.id, "🔒", `${how}捕まった！`, [`場所：${nm(th.k)}`, "仲間の解放作業（合計2ターン）か「縄抜け」で抜け出せます", lossT], "bad");
+  if (why === "meet") note(g, d.id, "🎯", `${p.name}が鉢合わせして捕まった！`, [`${nm(th.k)} に怪盗が止まりました`], "good");
+  if (why === "ambush") note(g, d.id, "🎯", `張り込み成功！${p.name}を捕まえた`, [`場所：${nm(th.k)}`], "good");
+  if (why === "disguise") note(g, d.id, "🎯", `変装を見破った！${p.name}を捕まえた`, [`場所：${nm(th.k)}`], "good");
 }
 function escape(g, p, how) {
   const th = p.th;
@@ -376,6 +399,7 @@ function escape(g, p, how) {
   const hw = { heli: "ヘリで", disguise: "変装して", wire: "ワイヤー銃で" }[how];
   log(g, "all", `${p.name}が${hw}脱出しました（${nm(th.k)}・財宝${th.loot.length}個）`);
   alog(g, p.id, "脱出", { detail: how, to: nm(th.k), result: th.loot.map(id => g.tr.find(t => t.id === id).name).join("・") });
+  note(g, p.id, "🎉", `${hw}脱出成功！`, [th.loot.length ? `持ち出した財宝：${th.loot.map(id => g.tr.find(t => t.id === id).name).join("・")}` : "財宝は持っていません（山分けはもらえます）"], "good");
 }
 function checkBackDoor(g) {
   if (g.backOpen) return;
@@ -403,7 +427,9 @@ function resolveThieves(g) {
   for (const p of ts) {
     const th = p.th; if (th.status !== "active" || !th.tp.pick) continue;
     const pt = g.parts.find(x => !x.taken && x.k === th.k);
-    if (pt) { pt.taken = true; th.parts[pt.type] = (th.parts[pt.type] || 0) + 1; log(g, "th", `${p.name}が「${PARTS[pt.type]}」を拾いました`); alog(g, p.id, "変装パーツを拾う", { detail: PARTS[pt.type], to: nm(th.k) }); }
+    if (pt) { pt.taken = true; th.parts[pt.type] = (th.parts[pt.type] || 0) + 1; log(g, "th", `${p.name}が「${PARTS[pt.type]}」を拾いました`); alog(g, p.id, "変装パーツを拾う", { detail: PARTS[pt.type], to: nm(th.k) });
+      const have = PART_KEYS.filter(t => (th.parts[t] || 0) > 0).length;
+      note(g, p.id, "🧩", `変装パーツ「${PARTS[pt.type]}」を拾った`, [partsLine(th), have >= g.opt.partsNeed ? "変装の準備完了！正面ゲートに止まれば脱出できます" : `あと${g.opt.partsNeed - have}種類`], "good"); }
   }
   // 鉢合わせ
   for (const p of ts) if (p.th.status === "active" && d.k === p.th.k) capture(g, p, "meet", d.k);
@@ -415,28 +441,32 @@ function resolveThieves(g) {
       const roll = d6(); const tgt = tr.target - (tp.use.key ? 1 : 0); th.stats.unlockTry++;
       if (roll >= tgt) {
         tr.stage++; th.stats.unlockOk++;
-        if (tr.stage >= tr.need) { tr.taken = true; tr.holder = p.id; th.loot.push(tr.id); log(g, "th", `${p.name}が「${tr.name}」を手に入れました`); }
-        else log(g, "th", `${p.name}：「${tr.name}」のセキュリティを1段階解除（${tr.stage}/${tr.need}）`);
+        if (tr.stage >= tr.need) { tr.taken = true; tr.holder = p.id; th.loot.push(tr.id); log(g, "th", `${p.name}が「${tr.name}」を手に入れました`); note(g, p.id, "💎", `「${tr.name}」を手に入れた！`, [`出目 ${roll}（${tgt}以上で成功）`, `${tr.value.toLocaleString("ja-JP")}万円。脱出すれば山分けに入ります`], "good"); }
+        else { log(g, "th", `${p.name}：「${tr.name}」のセキュリティを1段階解除（${tr.stage}/${tr.need}）`); note(g, p.id, "🔐", `解除成功（${tr.stage}/${tr.need}段階）`, [`「${tr.name}」 出目 ${roll}（${tgt}以上で成功）`, `あと${tr.need - tr.stage}段階で手に入ります`], "good"); }
         alog(g, p.id, "解除", { dice: roll, detail: `${tr.name}（${tgt}以上で成功）`, to: nm(th.k), result: tr.taken ? "入手" : "1段階成功" });
       } else {
         tr.fails++; th.stats.fails++;
         log(g, "th", `${p.name}：「${tr.name}」の解除に失敗（失敗${tr.fails}回）`);
-        if (tr.fails >= g.opt.alarmFails && !tr.alarm) { tr.alarm = true; th.alarmTrig = true; log(g, "all", `🚨 警報！ ${nm(tr.k)} の「${tr.name}」で警報が鳴りました`); }
+        let rang = false;
+        if (tr.fails >= g.opt.alarmFails && !tr.alarm) { tr.alarm = true; th.alarmTrig = true; rang = true; log(g, "all", `🚨 警報！ ${nm(tr.k)} の「${tr.name}」で警報が鳴りました`); note(g, g.detId, "🚨", "警報が鳴った！", [`${nm(tr.k)} の「${tr.name}」`, "怪盗がいるか、近くにいたはずです"], "good"); }
+        note(g, p.id, rang ? "🚨" : "❌", rang ? "解除失敗…警報が鳴った！" : "解除失敗", [`「${tr.name}」 出目 ${roll}（${tgt}以上で成功）`, rang ? "財宝の場所が探偵に知られました" : `この財宝の失敗 ${tr.fails}回（${g.opt.alarmFails}回で警報）`], "bad");
         alog(g, p.id, "解除", { dice: roll, detail: `${tr.name}（${tgt}以上で成功）`, to: nm(th.k), result: tr.alarm && th.alarmTrig ? "失敗・警報" : "失敗" });
       }
     } else if (tp.act === "release") {
       const c = thieves(g).find(q => q.id !== p.id && q.th.status === "captured" && q.th.k === th.k);
-      if (c) { c.th.rel += tp.use.pick ? 2 : 1; c.th.relBy.push(p.id); log(g, "th", `${p.name}が ${c.name} の解放作業をしました（${Math.min(c.th.rel, c.th.relNeed)}/${c.th.relNeed}・そろうと次のターンの始めに解放）`); alog(g, p.id, "解放作業", { detail: c.name, to: nm(th.k), result: `${c.th.rel}/${c.th.relNeed}` }); }
+      if (c) { c.th.rel += tp.use.pick ? 2 : 1; c.th.relBy.push(p.id); log(g, "th", `${p.name}が ${c.name} の解放作業をしました（${Math.min(c.th.rel, c.th.relNeed)}/${c.th.relNeed}・そろうと次のターンの始めに解放）`); note(g, p.id, "🛠", `${c.name}の解放作業（${Math.min(c.th.rel, c.th.relNeed)}/${c.th.relNeed}）`, [c.th.rel >= c.th.relNeed ? "次のターンの始めに解放されます" : `あと${c.th.relNeed - c.th.rel}ターン分`], "info"); alog(g, p.id, "解放作業", { detail: c.name, to: nm(th.k), result: `${c.th.rel}/${c.th.relNeed}` }); }
     } else if (tp.act === "receive") {
       const c = thieves(g).find(q => q.id !== p.id && q.th.status === "captured" && q.th.k === th.k && q.th.loot.length);
-      if (c) { th.pendingRecv = c.id; log(g, "th", `${p.name}が ${c.name} から財宝の受け取りを始めました（次のターンの始めに完了）`); alog(g, p.id, "受け取り開始", { detail: c.name, to: nm(th.k) }); }
+      if (c) { th.pendingRecv = c.id; log(g, "th", `${p.name}が ${c.name} から財宝の受け取りを始めました（次のターンの始めに完了）`); note(g, p.id, "🤝", `${c.name}から財宝の受け取りを始めた`, ["次のターンの始めに受け取れます（そのときも同じマスにいること）"], "info"); alog(g, p.id, "受け取り開始", { detail: c.name, to: nm(th.k) }); }
     }
   }
   // 警報器
   for (const p of ts) {
     if (p.th.status !== "active") continue;
     const i = g.devices.indexOf(p.th.k);
-    if (i >= 0) { g.devices.splice(i, 1); d.info.push({ r: g.round, t: g.turn, m: `🔔 警報器：${nm(p.th.k)} に怪盗が止まりました` }); log(g, "det", `🔔 警報器：${nm(p.th.k)} に怪盗が止まりました`); alog(g, p.id, "警報器に反応", { to: nm(p.th.k) }); }
+    if (i >= 0) { g.devices.splice(i, 1); d.info.push({ r: g.round, t: g.turn, m: `🔔 警報器：${nm(p.th.k)} に怪盗が止まりました` }); log(g, "det", `🔔 警報器：${nm(p.th.k)} に怪盗が止まりました`); alog(g, p.id, "警報器に反応", { to: nm(p.th.k) });
+      note(g, g.detId, "🔔", "警報器が作動した！", [`${nm(p.th.k)} に怪盗が止まりました`], "good");
+      note(g, p.id, "🔔", "警報器に引っかかった！", [`${nm(p.th.k)} にいることが探偵に知られました`], "bad"); }
   }
   // 脱出
   for (const p of ts) {
@@ -451,7 +481,9 @@ function resolveThieves(g) {
   }
   // 張り込み
   if (d.ambush != null) {
-    for (const p of ts) if (p.th.status === "active" && dist(p.th.k, d.ambush) <= 1) capture(g, p, "ambush", d.ambush);
+    const hitA = ts.filter(p => p.th.status === "active" && dist(p.th.k, d.ambush) <= 1);
+    hitA.forEach(p => capture(g, p, "ambush", d.ambush));
+    if (!hitA.length) note(g, g.detId, "💨", "張り込みは空振り", [`${nm(d.ambush)} とその上下左右に怪盗はいませんでした`], "bad");
     d.ambush = null;
   }
   checkBackDoor(g);
@@ -462,20 +494,22 @@ function resolveThieves(g) {
 
 /* ---------- 探偵の調査：財宝・変装パーツのマスに止まると、そこの今の状況が分かる ---------- */
 function inspect(g, p) {
-  const d = p.det; const k = d.k; if (k == null) return;
+  const d = p.det; const k = d.k; if (k == null) return [];
+  const out = [];
   d.known = d.known || { tr: {}, parts: {} };
   const tr = g.tr.find(t => t.k === k);
   if (tr) {
     d.known.tr[tr.id] = { taken: tr.taken, stage: tr.stage, need: tr.need, fails: tr.fails, t: g.turn };
     const m = tr.taken ? `調査：${nm(k)}「${tr.name}」は すでに盗まれていた` : `調査：${nm(k)}「${tr.name}」はまだある（解除 ${tr.stage}/${tr.need}段階・失敗${tr.fails}回）`;
-    d.info.push({ r: g.round, t: g.turn, m }); log(g, "det", m); alog(g, p.id, "調査", { to: nm(k), result: m });
+    d.info.push({ r: g.round, t: g.turn, m }); log(g, "det", m); alog(g, p.id, "調査", { to: nm(k), result: m }); out.push("🔍 " + m);
   }
   const pt = g.parts.find(x => x.k === k);
   if (pt) {
     d.known.parts[pt.id] = { taken: pt.taken, t: g.turn };
     const m = `調査：${nm(k)} の変装パーツ「${PARTS[pt.type]}」は ${pt.taken ? "なくなっていた" : "まだある"}`;
-    d.info.push({ r: g.round, t: g.turn, m }); log(g, "det", m); alog(g, p.id, "調査", { to: nm(k), result: m });
+    d.info.push({ r: g.round, t: g.turn, m }); log(g, "det", m); alog(g, p.id, "調査", { to: nm(k), result: m }); out.push("🔍 " + m);
   }
+  return out;
 }
 E.inspect = inspect;
 
@@ -510,7 +544,7 @@ function detAct(g, p, a) {
       targets = [base];
       if (d.net) neighbors(g, base).filter(k => FL(k) === FL(base)).forEach(k => targets.push(k));
     }
-    const from = d.k; d.k = tp.dest; inspect(g, p);
+    const from = d.k; d.k = tp.dest; const insp = inspect(g, p);
     alog(g, p.id, "移動", { from: nm(from), to: nm(d.k), dice: tp.die || "", detail: `${g.step}回目${tp.stay ? "・留まる" : ""}`, result: act });
     // オイル
     const oi = g.oils.findIndex(o => o.k === d.k);
@@ -520,19 +554,26 @@ function detAct(g, p, a) {
       log(g, "th", `探偵が ${nm(d.k)} のオイルを踏みました`);
       g.reveals.push({ r: g.round, t: g.turn, k: d.k, text: `探偵は ${nm(d.k)} でオイルを踏んだ` });
       alog(g, p.id, "オイルを踏んだ", { to: nm(d.k) });
+      note(g, p.id, "🛢", "オイルで滑った！", [`${nm(d.k)} に怪盗のオイルが仕掛けてありました`, "このターンの残りの行動はできません", "踏んだ場所は怪盗に知られました", ...insp], "bad");
+      thieves(g).filter(q => q.th.status !== "escaped").forEach(q => note(g, q.id, "🛢", "探偵がオイルを踏んだ！", [`場所：${nm(d.k)}`], "good"));
       return endDetTurn(g);
     }
     if (act === "capture") {
       const hit = thieves(g).filter(q => q.th.status === "active" && targets.includes(q.th.k));
       if (g.opt.capture === "near2") g.searchMarks.push({ k: targets[0], t: g.turn });
-      if (hit.length) hit.forEach(q => capture(g, q, "det", d.k));
-      else log(g, "det", `${targets.map(nm).join("・")} には誰もいませんでした`);
+      if (hit.length) { hit.forEach(q => capture(g, q, "det", d.k)); note(g, p.id, "🎯", `捕縛成功！${hit.map(q => q.name).join("・")}を捕まえた`, [`場所：${[...new Set(hit.map(q => nm(q.th.k)))].join("・")}`, ...insp], "good"); }
+      else { log(g, "det", `${targets.map(nm).join("・")} には誰もいませんでした`); note(g, p.id, "💨", "空振り…誰もいなかった", [`調べたマス：${targets.map(nm).join("・")}`, ...insp], "bad"); }
       alog(g, p.id, "捕縛", { to: targets.map(nm).join("・"), result: hit.length ? hit.map(q => q.name).join("・") : "空振り" });
     } else if (act === "ambush") {
       d.ambush = d.k; log(g, "det", `${nm(d.k)} で張り込みを始めました（次の怪盗のターン終了時、上下左右1マスにいる怪盗も捕縛）`); alog(g, p.id, "張り込み", { to: nm(d.k) });
+      if (insp.length) note(g, p.id, "🔍", "調査結果", insp, "info");
       return endDetTurn(g);
-    } else alog(g, p.id, "パス", {});
-    if (!thieves(g).some(q => q.th.status === "active")) { endRound(g, "怪盗が全員、脱出か捕縛になりました"); return null; }
+    } else { alog(g, p.id, "パス", {}); if (insp.length) note(g, p.id, "🔍", "調査結果", insp, "info"); }
+    // 動ける怪盗がいなくなったら探偵のターンは終わり。ラウンドの終了は次の怪盗のターン終了時に判定する（縄抜けのチャンスを残す）
+    if (!thieves(g).some(q => q.th.status === "active")) {
+      if (!thieves(g).some(q => q.th.status === "captured")) { endRound(g, "怪盗が全員、脱出か捕縛になりました"); return null; }
+      return endDetTurn(g);
+    }
     if (g.step >= 2) return endDetTurn(g);
     g.step = 2; d.tp = { roll: null, stay: false, dest: null };
     return null;
@@ -570,7 +611,7 @@ function useSkill(g, p, a) {
     if (d.tp.roll != null || d.tp.stay) return "階段跳びは、サイコロを振る前に使います"; const from = d.k; d.k = otherFloor(d.k); msg = `階段跳び：${nm(from)} → ${nm(d.k)}`;
   } else if (a.id === "secure") {
     const tr0 = g.tr.find(t => t.k === d.k); if (!tr0) return "財宝のマスにいるときだけ使えます";
-    if (tr0.taken) { inspect(g, p); return "この財宝はもう盗まれていました"; }
+    if (tr0.taken) { const ins = inspect(g, p); note(g, p.id, "🔍", "この財宝はもう盗まれていました", ins, "bad"); return null; }
     const tr = tr0;
     if (tr.secured) return "この財宝にはもう使っています";
     tr.secured = true; tr.need++; msg = `セキュリティ強化：「${tr.name}」の解除段階が${tr.need}段階になりました`;
@@ -580,13 +621,14 @@ function useSkill(g, p, a) {
   }
   if (s.ct > 0) d.cd[a.id] = s.ct + 1;
   d.info.push({ r: g.round, t: g.turn, m: msg }); log(g, "det", msg);
+  note(g, p.id, "🔎", s.name, [msg.replace(/^[^：]+：/, "")], "info");
   alog(g, p.id, "スキル", { detail: s.name, to: nm(d.k), result: msg });
   return null;
 }
 function endDetTurn(g) {
   const p = det(g); const d = p.det;
   d.net = false; d.sprint = 0;
-  if (g.bugNext) { g.bugNext = false; g.floorHint = { t: g.turn, f: FL(d.k) }; log(g, "th", `盗聴器：探偵は今 ${FL(d.k) + 1}階にいます`); }
+  if (g.bugNext) { g.bugNext = false; g.floorHint = { t: g.turn, f: FL(d.k) }; log(g, "th", `盗聴器：探偵は今 ${FL(d.k) + 1}階にいます`); thieves(g).filter(q => q.th.status !== "escaped").forEach(q => note(g, q.id, "🎧", `盗聴器：探偵は今 ${FL(d.k) + 1}階`, [], "good")); }
   if (g.turn >= g.opt.turns) { endRound(g, `${g.opt.turns}ターンが終わりました`); return null; }
   g.turn++; startThiefTurn(g);
   return null;
@@ -769,6 +811,7 @@ function viewFor(g, pid) {
     floorHint: isTh ? g.floorHint : null, oils: isTh ? g.oils : [], records: g.records, errorsN: (g.errors || []).length,
     log: g.log.filter(l => l.vis === "all" || l.vis === pid || (l.vis === "th" && isTh) || (l.vis === "det" && isDet)).slice(-250),
     pending: pendingIds(g),
+    notes: (g.notes || []).filter(n => n.to.includes(pid) && n.r === g.round).slice(-20),
   };
   if (isTh) v.thieves = thieves(g).map(p => ({ id: p.id, k: p.th.k, status: p.th.status, loot: p.th.loot, parts: p.th.parts, heliCall: p.th.heliCall,
     tp: p.th.tp ? { done: p.th.tp.done, roll: p.th.tp.roll, dest: p.th.tp.dest, act: p.th.tp.act || null } : null, escHow: p.th.escHow, escTurn: p.th.escTurn }));

@@ -17,11 +17,13 @@ const BASE = (process.env.BASE || "http://127.0.0.1:8765/") + "?transport=bc";
   await host.click("#bstart");
   const view = p => p.evaluate(() => { const v = __S.view; return v && { phase: v.phase, stage: v.stage, role: v.role, me: v.me, pend: v.pending, tp: v.role === "det" ? v.det.tp : v.my && v.my.tp, status: v.my && v.my.status, turn: v.turn }; });
   let undoDone = false, reconDone = false;
+  let notesSeen = 0;
   for (let i = 0; i < 400; i++) {
     await host.waitForTimeout(60);
     const hv = await view(host);
     if (hv.phase === "roundEnd" || (hv.phase === "play" && hv.turn >= 4 && undoDone && reconDone)) break;
     for (const p of pages) {
+      if (await p.$("#bnoteok")) { await p.click("#bnoteok"); notesSeen++; }
       const v = await view(p); if (!v || !v.pend.includes(v.me)) continue;
       if (v.phase === "setup") { if (v.role === "det") { await p.click("#bsetrand"); await p.click("#bsetdet"); } else { const st0 = await p.$$("[data-tstart]"); await st0[0].click(); await p.click("#bdecN"); } break; }
       if (v.role === "thief") {
@@ -51,6 +53,6 @@ const BASE = (process.env.BASE || "http://127.0.0.1:8765/") + "?transport=bc";
   // 探偵の画面に怪盗の位置が出ていないか（情報漏れ）
   for (const p of pages) { const leak = await p.evaluate(() => { const v = __S.view; return v.role === "det" ? !!v.thieves : v.role === "thief" ? !!v.det : null; }); if (leak) console.log("LEAK on", await p.evaluate(() => __S.seat)); }
   await guests[0].screenshot({ path: "test/shot_guest.png", fullPage: true });
-  console.log("errors", errs.length); errs.slice(0, 10).forEach(e => console.log(e));
+  console.log("notes", notesSeen, "errors", errs.length); errs.slice(0, 10).forEach(e => console.log(e));
   await browser.close();
 })();
