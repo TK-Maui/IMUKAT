@@ -63,15 +63,9 @@ function allCapturedInDetTurn(g, d, ts) {
   ts.slice(1).forEach(p => { E.safeApply(g, p.id, { kind: "stay" }); E.safeApply(g, p.id, { kind: "confirm", act: "none" }); });
   check(ts[0].th.status === "active", "縄抜けしたターンに鉢合わせで捕まった");
   check(E.viewFor(g, ts[0].id).notes.some(n => /捕まらなかった/.test(n.title)), "免れた通知がない");
+  // 続く探偵のターン：留まって捕縛を選ぶと、通常どおり判定されて捕まる
   E.safeApply(g, d.id, { kind: "stay" }); E.safeApply(g, d.id, { kind: "act", act: "capture" });
-  check(ts[0].th.status === "active", "縄抜けしたターンに探偵の捕縛で捕まった");
-  check(E.viewFor(g, d.id).notes.some(n => /抜け出したばかり/.test(n.title)), "探偵に理由の通知がない");
-  check(g.stage === "det" && g.step === 2, "探偵の2回目に進まない");
-  E.safeApply(g, d.id, { kind: "stay" }); E.safeApply(g, d.id, { kind: "act", act: "pass" });
-  // 次のターン：同じマスに留まると鉢合わせで捕まる
-  E.safeApply(g, ts[0].id, { kind: "stay" }); E.safeApply(g, ts[0].id, { kind: "confirm", act: "none" });
-  ts.slice(1).forEach(p => { E.safeApply(g, p.id, { kind: "stay" }); E.safeApply(g, p.id, { kind: "confirm", act: "none" }); });
-  check(ts[0].th.status === "captured", "次のターンなのに捕まらない");
+  check(ts[0].th.status === "captured", "探偵のターンの捕縛で捕まらない（守りは怪盗のターンだけのはず）");
 }
 // 4) 仲間に解放されたターンも同じ
 {
