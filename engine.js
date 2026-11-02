@@ -5,7 +5,7 @@
 (function (root) {
 "use strict";
 const E = {};
-E.VERSION = "テスト版 v1.10";
+E.VERSION = "テスト版 v1.11";
 
 /* ---------- 乱数（ゲームごとの種から作る。同じ種＋同じ操作なら同じ結果） ---------- */
 let RNG = null;
@@ -38,7 +38,7 @@ const BUILDINGS = {
   museum: {
     name: "美術館", front: "D-13", back: "A-2", stairs: [["B-9", "F-9"], ["C-8", "G-8"]],
     roof: ["E-1", "H-16"], windows: ["F-4", "G-13"], starts: ["A-2", "D-13", "F-4", "G-13"],
-    tnames: { high: ["夜明けの涙"], mid: ["月下の貴婦人", "時を止めた懐中時計"], low: ["銀の燭台"] },
+    tnames: { high: ["夜明けの涙"], mid: ["月下の貴婦人", "時を止めた懐中時計", "眠れる獅子の像"], low: ["銀の燭台", "黄金の羽ペン"] },
   },
 };
 const _bk = {};
@@ -101,9 +101,20 @@ E.MONEY = MONEY;
 
 function defaultOpt() {
   return { turns: 12, thiefTimer: true, thiefSec: 30, detTimer: false, detSec: 90, items: true, skills: true,
-    capture: "land", partsNeed: 4, alarmFails: 2, startMoneyPer: 100 };
+    capture: "land", partsNeed: 4, alarmFails: 2, startMoneyPer: 100, itemN: null, trN: null };
 }
 E.defaultOpt = defaultOpt;
+/* ---------- 人数による調整：怪盗が少ないほどアイテムと財宝を増やす（null＝人数に合わせて自動） ---------- */
+const SCALE = { 1: { items: 3, tr: 6 }, 2: { items: 3, tr: 6 }, 3: { items: 3, tr: 5 }, 4: { items: 2, tr: 4 }, 5: { items: 2, tr: 4 } };
+E.SCALE = SCALE;
+function scaleFor(g) {
+  const nT = Math.max(1, g.players.length - 1); const s = SCALE[Math.min(5, nT)];
+  return { nT, items: g.opt.itemN || s.items, tr: g.opt.trN || s.tr };
+}
+E.scaleFor = scaleFor;
+// 財宝の並び：4つ（高・普通・普通・安）→ 5つ目は普通 → 6つ目は安
+const TR_SPECS = [["high", 0], ["mid", 0], ["mid", 1], ["low", 0], ["mid", 2], ["low", 1]];
+E.TR_SPECS = TR_SPECS;
 
 /* ---------- 基本 ---------- */
 const P = (g, id) => g.players.find(p => p.id === id);
@@ -157,13 +168,13 @@ function placeRandom(g) {
   const b = bld(g); const used = new Set(fixedList(g));
   const pickIn = area => { for (let i = 0; i < 200; i++) { const n = 1 + rnd(16); const k = parse(area + "-" + n); if (!used.has(k)) { used.add(k); return k; } } return null; };
   const tr = []; const areasUsed = new Set(); const perFloor = [0, 0];
-  const specs = [["high", 0], ["mid", 0], ["mid", 1], ["low", 0]];
+  const specs = TR_SPECS.slice(0, Math.min(6, Math.max(4, scaleFor(g).tr))); const perMax = Math.ceil(specs.length / 2);
   for (const [rank, ni] of specs) {
     let area;
     for (let i = 0; i < 500; i++) {
       const a = "ABCDEFGH"[rnd(8)]; const f = "ABCD".includes(a) ? 0 : 1;
       if (rank === "high" && !"BCFG".includes(a)) continue;
-      if (areasUsed.has(a) || perFloor[f] >= 2) continue;
+      if (areasUsed.has(a) || perFloor[f] >= perMax) continue;
       area = a; break;
     }
     areasUsed.add(area); perFloor["ABCD".includes(area) ? 0 : 1]++;
@@ -186,13 +197,15 @@ function startRound(g) {
   placeRandom(g);
   const b = bld(g);
   const notices = shuffle(Object.keys(NOTICES));
-  const deck = shuffle(ITEM_DECK());
+  const sc = scaleFor(g);
+  let deck = shuffle(ITEM_DECK());
+  while (deck.length < sc.items * sc.nT) deck = shuffle(ITEM_DECK().filter(x => x !== "wire")).concat(deck); // 足りなければワイヤー銃以外をもう1組
   let ni = 0;
   g.players.forEach(p => {
     if (p.id === g.detId) {
       p.det = { k: null, skills: [], cd: {}, ready: false, ambush: null, captured: [], capN: 0, capBy: {}, sprint: 0, net: false, blackout: false, secured: [], info: [], known: { tr: {}, parts: {} } };
     } else {
-      p.th = { k: null, status: "active", loot: [], parts: {}, items: g.opt.items ? [deck.pop(), deck.pop()].filter(Boolean) : [], notice: notices[ni++ % notices.length], declared: null,
+      p.th = { k: null, status: "active", loot: [], parts: {}, items: g.opt.items ? Array.from({ length: sc.items }, () => deck.pop()).filter(Boolean) : [], notice: notices[ni++ % notices.length], declared: null,
         heliCall: null, escTurn: null, escHow: null, escK: null, rescues: 0, alarmTrig: false, rel: 0, relNeed: 2, relBy: [], pendingRecv: null, tp: null, stats: { moves: 0, stays: 0, unlockTry: 0, unlockOk: 0, fails: 0, timeouts: 0, items: 0 } };
     }
   });

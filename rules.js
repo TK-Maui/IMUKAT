@@ -152,7 +152,8 @@ ${heliFig()}
     const items = Object.entries(E.ITEMS).map(([, v]) => `<tr><td>${v.name}</td><td>${v.text}</td></tr>`).join("");
     const skills = Object.entries(E.SKILLS).map(([, v]) => `<tr><td>${v.name}</td><td>${v.text}</td><td class="n">${v.ct ? v.ct + "ターン" : "なし"}</td></tr>`).join("");
     const notices = Object.values(E.NOTICES).map(v => `<tr><td>${v.name}</td><td>${v.text}</td></tr>`).join("");
-    const trs = [["high", 0], ["mid", 0], ["mid", 1], ["low", 0]].map(([r, i]) => { const t = TR[r]; const faces = []; for (let f = t.target; f <= 6; f++) faces.push(f); return `<tr><td>${t.label}：${B.tnames[r][i]}</td><td class="n">${man(t.value)}</td><td>${faces.join("・")}が当たり<br>${t.need}段階</td></tr>`; }).join("");
+    const scaleRows = [5, 4, 3, 2, 1].map(n => `<tr><td>怪盗${n}人（${n + 1}人で遊ぶ）</td><td class="n">${E.SCALE[n].items}枚</td><td class="n">${E.SCALE[n].tr}つ</td></tr>`).join("");
+    const trs = E.TR_SPECS.map(([r, i], j) => { const t = TR[r]; const faces = []; for (let f = t.target; f <= 6; f++) faces.push(f); return `<tr><td>${t.label}：${B.tnames[r][i]}${j >= 4 ? `<br><span class="sub">${j + 1}つ目（財宝が${j + 1}つのとき）</span>` : ""}</td><td class="n">${man(t.value)}</td><td>${faces.join("・")}が当たり<br>${t.need}段階</td></tr>`; }).join("");
     return `
 <p class="sub">テスト版 ${E.VERSION} に合わせています。数値はテストプレイで調整中です。</p>
 <div class="rb-toc">${[["f1", "1 全体像"], ["f2", "2 ラウンドの流れ"], ["f3", "3 怪盗のターン"], ["f4", "4 探偵のターン"], ["f5", "5 脱出"], ["f6", "6 お金"], ["f7", "7 細かいルール"], ["f8", "8 よくある質問"]].map(([id, t]) => `<button data-rbgo="${id}">${t}</button>`).join("")}</div>
@@ -172,7 +173,7 @@ ${heliFig()}
 <tr><th>稼ぎ方</th><td>捕縛の報奨金・累計捕縛・脱出失敗・予告阻止</td><td>山分け・予告状・華麗さ・救出</td></tr>
 <tr><th>自分の位置</th><td>自分だけが知っている</td><td>仲間同士は共有マップで見える</td></tr>
 <tr><th>相手の位置</th><td>見えない（足跡・警報・スキルで推理）</td><td>見えない（捕縛などで分かることも）</td></tr>
-<tr><th>特別な力</th><td>スキル4つ・1ターン2回行動</td><td>アイテム2枚・仲間との協力</td></tr></table>
+<tr><th>特別な力</th><td>スキル4つ・1ターン2回行動</td><td>アイテム2〜3枚（人数による）・仲間との協力</td></tr></table>
 <h3>怪盗は「協力しながら競う」</h3>
 <p>盗み出した財宝は、ラウンドの終わりに怪盗全員で山分けします（捕まった怪盗ももらえます）。だからチームで協力します。ただし予告状・華麗さ・救出のボーナスは個人のもの。仲間を助けながら、自分の目標も狙いましょう。</p>
 
@@ -181,12 +182,16 @@ ${roundFig()}
 <h3>準備</h3>
 <ol>
 <li><b>探偵を決める。</b>1ラウンド目は最年少の人。その後は時計回り。</li>
-<li><b>財宝と変装パーツを置く。</b>アプリかダイスで、財宝4つと変装パーツ8個をランダムに置きます。場所は全員に見えます。</li>
-<li><b>怪盗がカードを引く。</b>アイテムカード2枚と予告状カード1枚。自分だけが見ます。</li>
+<li><b>財宝と変装パーツを置く。</b>アプリかダイスで、財宝（人数により4〜6つ）と変装パーツ8個をランダムに置きます。場所は全員に見えます。</li>
+<li><b>怪盗がカードを引く。</b>アイテムカード（人数により2〜3枚）と予告状カード1枚。自分だけが見ます。</li>
 <li><b>探偵がスキルを選ぶ。</b>全スキルから好きな4つ。</li>
 <li><b>スタート地点を秘密に選ぶ。</b>（下の表）</li>
 <li><b>予告するか決める。</b>怪盗全員で「せーの」で、予告状を表にするか伏せるかを選びます。</li>
 <li>1ターン目の怪盗のターンから始めます。</li></ol>
+<h3>人数による調整</h3>
+<p>怪盗が少ないほど1人1人の負担が大きくなるので、アイテムと財宝を増やします。財宝が増えると、探偵が見張る場所も増えます。</p>
+<table class="rb-t"><tr><th>人数</th><th class="n">アイテム（1人）</th><th class="n">財宝</th></tr>${scaleRows}</table>
+<p class="sub">本番は4〜6人（怪盗3〜5人）想定です。アプリでは、部屋を作る画面で枚数と数を変えてテストできます。</p>
 <table class="rb-t"><tr><th></th><th>選べるマス</th><th>誰に見える？</th></tr>
 <tr><td>🎭 怪盗</td><td>裏口 ${CO(B.back)}・正面ゲート ${CO(B.front)}・2階の窓 ${CO(B.windows)} から1人ずつ</td><td>仲間には見える。探偵には見えない</td></tr>
 <tr><td>🕵️ 探偵</td><td>2階の「何もないマス」（財宝・パーツ・階段・窓・屋上階段は不可）</td><td>自分だけ</td></tr></table>
@@ -302,7 +307,7 @@ ${printFig()}
 <li>同じマスに仲間が何人いても、それぞれ1回ずつ振れます。取った財宝を誰が持つかは相談して決めます。</li>
 <li>1人が持てる財宝に上限はありません。ただし、持ったまま捕まってラウンドが終わると、その財宝は山分けに入りません。</li>
 <li><b>警報</b>：1つの財宝で失敗が合計${E.defaultOpt().alarmFails}回になると鳴り、その財宝の場所が全員に知らされます。</li>
-<li>置き方：財宝は1つのエリアに1つまで・1フロアに2つずつ。「高」はB・C・F・Gのどれかに置きます。変装パーツは4種類×2個を、各エリアに1個ずつ置きます。</li></ul>
+<li>置き方：財宝は1つのエリアに1つまで・1フロアに半分ずつ（5つのときは3つと2つ）。「高」はB・C・F・Gのどれかに置きます。変装パーツは4種類×2個を、各エリアに1個ずつ置きます。</li></ul>
 <h3>見える情報・見えない情報</h3>
 <table class="rb-t"><tr><th>情報</th><th>🎭 怪盗</th><th>🕵️ 探偵</th></tr>
 <tr><td>怪盗たちの位置</td><td>${yes}</td><td>${no}</td></tr>
@@ -338,7 +343,7 @@ ${printFig()}
 <table class="rb-t"><tr><th>予告状</th><th>達成条件</th></tr>${notices}</table>
 <p class="sub">「最も高い財宝」は「夜明けの涙」（1つだけ）です。ほかの財宝も一緒に持っていて構いません。</p>
 <h3>アイテム（怪盗）</h3>
-<p>ラウンドの始めに2枚配られ、そのラウンドはその2枚だけ使えます。使えるのは怪盗のターン中だけ。捕縛そのものを無効にするアイテムはありません。<span class="sub">（効果はテスト用の仮のものです）</span></p>
+<p>ラウンドの始めに人数に応じた枚数（2〜3枚）が配られ、そのラウンドはそのカードだけ使えます。使えるのは怪盗のターン中だけ。捕縛そのものを無効にするアイテムはありません。<span class="sub">（効果はテスト用の仮のものです）</span></p>
 <table class="rb-t"><tr><th>アイテム</th><th>効果</th></tr>${items}</table>
 <h3>スキル（探偵）</h3>
 <p class="sub">効果はテスト用の仮のものです。</p>
