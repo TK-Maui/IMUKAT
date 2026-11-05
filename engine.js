@@ -5,7 +5,7 @@
 (function (root) {
 "use strict";
 const E = {};
-E.VERSION = "テスト版 v1.11";
+E.VERSION = "テスト版 v1.12";
 
 /* ---------- 乱数（ゲームごとの種から作る。同じ種＋同じ操作なら同じ結果） ---------- */
 let RNG = null;
@@ -74,7 +74,7 @@ const ITEMS = {
   pick: { name: "ピッキングツール", text: "このターンの解放作業が、2ターン分進む" },
   rope: { name: "縄抜け", text: "捕縛されているときに使うと、自力で抜け出せる（そのターンから動ける）" },
   erase: { name: "足跡消し", text: "このターンは足跡を残さない" },
-  fake: { name: "偽の足跡", text: "好きなマスに、自分の色の足跡を1つ置く", target: true },
+  fake: { name: "偽の足跡", text: "好きなマスを選んで、自分の色の足跡を1つ置く。このターンは本当の足跡を残さない", target: true },
   blackout: { name: "停電スイッチ", text: "次の探偵のターン、探偵はスキルを使えない" },
   oil: { name: "オイル", text: "好きなマスに仕掛ける（探偵には見えない）。探偵がそこに止まると、そのターンの残りの行動ができなくなる", target: true },
   bug: { name: "盗聴器", text: "次の探偵のターンが終わったとき、探偵がいるフロアが怪盗全員に分かる" },
@@ -433,7 +433,7 @@ function resolveThieves(g) {
     const th = p.th, tp = th.tp;
     if (th.status !== "active") continue;
     if (tp.dest == null) { tp.dest = th.k; tp.stay = true; tp.act = "none"; th.stats.timeouts++; }
-    if (!tp.use.erase && g.turn > 1) g.prints.push({ pid: p.id, k: th.k, age: 0 });
+    if (!tp.use.erase && tp.use.fake == null && g.turn > 1) g.prints.push({ pid: p.id, k: th.k, age: 0 }); // 偽の足跡を使ったターンは本当の足跡を残さない
     if (tp.use.fake != null) g.prints.push({ pid: p.id, k: tp.use.fake, age: 0, fake: true });
     const from = th.k; th.k = tp.dest;
     if (tp.stay || from === th.k) th.stats.stays++; else th.stats.moves++;
