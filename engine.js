@@ -5,7 +5,7 @@
 (function (root) {
 "use strict";
 const E = {};
-E.VERSION = "テスト版 v1.13";
+E.VERSION = "テスト版 v1.14";
 
 /* ---------- 乱数（ゲームごとの種から作る。同じ種＋同じ操作なら同じ結果） ---------- */
 let RNG = null;
@@ -101,8 +101,10 @@ E.MONEY = MONEY;
 
 function defaultOpt() {
   return { turns: 12, thiefTimer: true, thiefSec: 30, detTimer: false, detSec: 90, items: true, skills: true,
-    capture: "land", partsNeed: 4, alarmFails: 2, startMoneyPer: 100, itemN: null, trN: null };
+    capture: "land", partsNeed: 3, alarmFails: 2, startMoneyPer: 100, itemN: null, trN: null, relTurns: 1 };
 }
+const relBase = g => (g && g.opt && g.opt.relTurns) || 1; // 解放に必要な作業（ターン数）
+E.relBase = relBase;
 E.defaultOpt = defaultOpt;
 /* ---------- 人数による調整：怪盗が少ないほどアイテムと財宝を増やす（null＝人数に合わせて自動） ---------- */
 const SCALE = { 1: { items: 3, tr: 6 }, 2: { items: 3, tr: 6 }, 3: { items: 3, tr: 5 }, 4: { items: 2, tr: 4 }, 5: { items: 2, tr: 4 } };
@@ -155,6 +157,8 @@ E.reach = reach;
 /* ---------- ゲーム開始・ラウンド準備 ---------- */
 function startGame(g) {
   if (g.players.length < 2) return "2人以上で始めてください";
+  g.opt.turns = 12; // 1ラウンドは12ターン固定
+  if (!g.opt.relTurns) g.opt.relTurns = 1;
   g.rounds = g.opt.rounds || g.players.length;
   g.order = g.players.map(p => p.id);
   g.players.forEach((p, i) => { p.color = i; p.money = g.players.length * g.opt.startMoneyPer; p.debt = 0; p.total = { det: 0 }; });
@@ -206,7 +210,7 @@ function startRound(g) {
       p.det = { k: null, skills: [], cd: {}, ready: false, ambush: null, captured: [], capN: 0, capBy: {}, sprint: 0, net: false, blackout: false, secured: [], info: [], known: { tr: {}, parts: {} } };
     } else {
       p.th = { k: null, status: "active", loot: [], parts: {}, items: g.opt.items ? Array.from({ length: sc.items }, () => deck.pop()).filter(Boolean) : [], notice: notices[ni++ % notices.length], declared: null,
-        heliCall: null, escTurn: null, escHow: null, escK: null, rescues: 0, alarmTrig: false, rel: 0, relNeed: 2, relBy: [], pendingRecv: null, tp: null, stats: { moves: 0, stays: 0, unlockTry: 0, unlockOk: 0, fails: 0, timeouts: 0, items: 0 } };
+        heliCall: null, escTurn: null, escHow: null, escK: null, rescues: 0, alarmTrig: false, rel: 0, relNeed: relBase(g), relBy: [], pendingRecv: null, tp: null, stats: { moves: 0, stays: 0, unlockTry: 0, unlockOk: 0, fails: 0, timeouts: 0, items: 0 } };
     }
   });
   g.phase = "setup";
@@ -237,7 +241,7 @@ function startThiefTurn(g) {
   for (const p of thieves(g)) {
     const th = p.th;
     if (th.status === "captured" && th.rel >= th.relNeed) {
-      th.status = "active"; th.rel = 0; th.relNeed = 2; th.safeT = g.turn; th.safeK = th.k;
+      th.status = "active"; th.rel = 0; th.relNeed = relBase(g); th.safeT = g.turn; th.safeK = th.k;
       const by = th.relBy[th.relBy.length - 1]; const rp = P(g, by); if (rp) rp.th.rescues++;
       log(g, "all", `${p.name}が解放されました（${nm(th.k)}）`); alog(g, by, "解放の完了", { detail: p.name, to: nm(th.k) });
       note(g, p.id, "🔓", "解放された！このターンから動けます", [`場所：${nm(th.k)}`, "この怪盗のターンは、このマスにいる限り探偵と同じマスでも捕まりません（探偵のターンには捕まえられることがあります）"], "good");
@@ -293,7 +297,7 @@ function thiefAct(g, p, a) {
     if (it === "rope") {
       if (th.status !== "captured") return "縄抜けは捕縛されているときだけ使えます";
       th.items.splice(i, 1); th.stats.items++;
-      th.status = "active"; th.rel = 0; th.relNeed = 2; th.relBy = []; th.safeT = g.turn; th.safeK = th.k;
+      th.status = "active"; th.rel = 0; th.relNeed = relBase(g); th.relBy = []; th.safeT = g.turn; th.safeK = th.k;
       th.tp = { done: false, roll: null, stay: false, dest: null, use: {} };
       log(g, "all", `${p.name}が縄抜けで自力で抜け出しました（${nm(th.k)}）`); alog(g, p.id, "アイテム", { detail: ITEMS[it].name, from: nm(th.k) });
       note(g, p.id, "🪢", "縄抜け成功！このターンから動けます", ["この怪盗のターンは、このマスにいる限り探偵と同じマスでも捕まりません（探偵のターンには捕まえられることがあります）"], "good");
@@ -394,7 +398,7 @@ function isSafe(g, p) { const th = p.th; return th && g.stage === "thief" && th.
 E.isSafe = isSafe;
 function capture(g, p, why, dk) {
   const th = p.th; const d = det(g);
-  th.status = "captured"; th.rel = 0; th.relNeed = 2; th.relBy = []; th.pendingRecv = null; th.seized = false;
+  th.status = "captured"; th.rel = 0; th.relNeed = relBase(g); th.relBy = []; th.pendingRecv = null; th.seized = false;
   g.prints = g.prints.filter(x => x.pid !== p.id);
   d.det.capN++; d.det.capBy = d.det.capBy || {}; d.det.capBy[p.id] = (d.det.capBy[p.id] || 0) + 1; if (!d.det.captured.includes(p.id)) d.det.captured.push(p.id);
   const how = { meet: "探偵と鉢合わせして", det: "探偵に", ambush: "張り込み中の探偵に", disguise: "変装を見破られて" }[why] || "";
@@ -403,7 +407,7 @@ function capture(g, p, why, dk) {
   else g.reveals.push({ r: g.round, t: g.turn, k: dk != null ? dk : d.det.k, text: `探偵は ${nm(dk != null ? dk : d.det.k)} にいた` });
   alog(g, p.id, "捕縛された", { detail: why, to: nm(th.k), result: `探偵=${nm(d.det.k)}` });
   const lossT = th.loot.length ? `持っている財宝（${th.loot.map(id => g.tr.find(t => t.id === id).name).join("・")}）は、仲間が受け取らないと山分けに入りません` : "";
-  note(g, p.id, "🔒", `${how}捕まった！`, [`場所：${nm(th.k)}`, "仲間の解放作業（合計2ターン）か「縄抜け」で抜け出せます", lossT], "bad");
+  note(g, p.id, "🔒", `${how}捕まった！`, [`場所：${nm(th.k)}`, `仲間の解放作業（合計${th.relNeed}ターン）か「縄抜け」で抜け出せます`, lossT], "bad");
   if (why === "meet") note(g, d.id, "🎯", `${p.name}が鉢合わせして捕まった！`, [`${nm(th.k)} に怪盗が止まりました`], "good");
   if (why === "ambush") note(g, d.id, "🎯", `張り込み成功！${p.name}を捕まえた`, [`場所：${nm(th.k)}`], "good");
   if (why === "disguise") note(g, d.id, "🎯", `変装を見破った！${p.name}を捕まえた`, [`場所：${nm(th.k)}`], "good");

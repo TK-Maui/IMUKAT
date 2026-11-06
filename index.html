@@ -602,7 +602,7 @@ function renderLobby(v){
   <tr><td>変装に必要なパーツ</td><td><select id="o_pn" ${can?"":"disabled"}>${[2,3,4].map(n=>`<option ${o.partsNeed===n?"selected":""}>${n}</option>`).join("")}</select>種類</td></tr>
   <tr><td>アイテムカード（1人あたり）</td><td><select id="o_in" ${can?"":"disabled"}><option value="">人数に合わせる（今は${E.scaleFor({players:v.players,opt:{}}).items}枚）</option>${[1,2,3,4].map(n=>`<option value="${n}" ${o.itemN===n?"selected":""}>${n}枚</option>`).join("")}</select></td></tr>
   <tr><td>財宝の数</td><td><select id="o_tn" ${can?"":"disabled"}><option value="">人数に合わせる（今は${E.scaleFor({players:v.players,opt:{}}).tr}つ）</option>${[4,5,6].map(n=>`<option value="${n}" ${o.trN===n?"selected":""}>${n}つ</option>`).join("")}</select></td></tr>
-  <tr><td>1ラウンドのターン数</td><td><input type="number" id="o_turns" min="4" max="20" value="${o.turns}" style="width:80px" ${can?"":"disabled"}></td></tr>
+  <tr><td>解放に必要な作業</td><td><select id="o_rel" ${can?"":"disabled"}>${[1,2,3].map(n=>`<option value="${n}" ${(o.relTurns||1)===n?"selected":""}>${n}ターン</option>`).join("")}</select></td></tr>
   <tr><td>ラウンド数</td><td><select id="o_rounds" ${can?"":"disabled"}><option value="">人数と同じ（全員1回探偵）</option>${[1,2,3,4,5,6].map(n=>`<option value="${n}" ${o.rounds===n?"selected":""}>${n}ラウンド</option>`).join("")}</select></td></tr>
   </table>`;
   if(can)h+=`<div class="row" style="margin-top:10px"><button class="primary" id="bstart" ${v.players.length<2?"disabled":""}>この${v.players.length}人で始める</button></div><div class="sub">本番は4〜6人想定です（テスト用に2人から始められます）。1ラウンド目の探偵は、参加した順の1番目の人です。</div>`;
@@ -899,8 +899,8 @@ function bind(){
   document.querySelectorAll("[data-proxy]").forEach(b=>b.onclick=()=>{const id=b.dataset.proxy;if(!confirm(`${pname(id)}の代わりに進めますか？`))return;const err=hostApply(id,null,()=>E.proxyAct(S.game,id),`${pname(id)}の代わりに進める`);if(err)toast(err);broadcast()});
   if(v.phase==="lobby"&&isHost()){
     const save=()=>{const o=S.game.opt;o.thiefTimer=$("#o_tt").checked;o.thiefSec=Math.min(300,Math.max(10,+$("#o_ts").value||30));o.detTimer=$("#o_dt").checked;o.detSec=Math.min(300,Math.max(10,+$("#o_ds").value||90));
-      o.items=$("#o_it").checked;o.skills=$("#o_sk").checked;o.capture=$("#o_cap").value;o.partsNeed=+$("#o_pn").value;o.turns=Math.min(20,Math.max(4,+$("#o_turns").value||12));o.rounds=+$("#o_rounds").value||null;o.itemN=+$("#o_in").value||null;o.trN=+$("#o_tn").value||null;broadcast()};
-    ["o_tt","o_ts","o_dt","o_ds","o_it","o_sk","o_cap","o_pn","o_turns","o_rounds","o_in","o_tn"].forEach(id=>{const e=document.getElementById(id);if(e)e.onchange=save});
+      o.items=$("#o_it").checked;o.skills=$("#o_sk").checked;o.capture=$("#o_cap").value;o.partsNeed=+$("#o_pn").value;o.turns=12;o.relTurns=+$("#o_rel").value||1;o.rounds=+$("#o_rounds").value||null;o.itemN=+$("#o_in").value||null;o.trN=+$("#o_tn").value||null;broadcast()};
+    ["o_tt","o_ts","o_dt","o_ds","o_it","o_sk","o_cap","o_pn","o_rel","o_rounds","o_in","o_tn"].forEach(id=>{const e=document.getElementById(id);if(e)e.onchange=save});
     on("bstart",()=>{const err=hostApply(S.seat,{kind:"start"});if(err)toast(err);broadcast()});
   }
   on("bnext",()=>{const err=hostApply(S.seat,{kind:"nextRound"});if(err)toast(err);S.ui={};broadcast()});
