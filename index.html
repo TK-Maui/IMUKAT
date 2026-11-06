@@ -646,7 +646,7 @@ function mapHTML(v,o){
     return `<div class="floorwrap"><div class="floorttl"><span>${f+1}階（${f?"E F / G H":"A B / C D"}）</span><span class="sub">${f?"屋＝屋上階段・窓＝窓":"正＝正面ゲート・裏＝裏口"}・階＝階段</span></div><div class="board">${c}</div></div>`;
   };
   const floors=o.floors||[0,1];
-  return floors.map(floorHTML).join("")+`<div class="legend"><span>高/普/安＝財宝</span><span style="color:var(--part)">服面証棒＝変装パーツ</span><span>●＝足跡（薄いのは2ターン前）</span>${myRole==="det"||all?"<span>🕵＝探偵</span>":""}${myRole==="det"?"<span>✕・薄い字＝調べたらなくなっていた／数字＝調べたときの解除段階（探偵は止まったマスの財宝・変装パーツだけ状況が分かります）</span>":""}${myRole!=="det"?"<span>赤枠＝探偵がいた場所</span>":""}<span>⛓＝捕縛中</span><span>点線の丸＝移動予定</span></div>`;
+  return floors.map(floorHTML).join("")+`<div class="legend"><span>高/普/安＝財宝</span><span style="color:var(--part)">服面証棒＝変装パーツ</span><span>●＝足跡（薄いのは2ターン前）</span>${myRole==="det"||all?"<span>🕵＝探偵</span>":""}${myRole==="det"?"<span>✕・薄い字＝調べたらなくなっていた／数字＝調べたときの解除段階（探偵は止まったマスの財宝・変装パーツだけ状況が分かります）</span>":""}${myRole!=="det"?"<span>オレンジの枠＝探偵がいた場所（1つ前のターンまで）</span>":""}<span>⛓＝捕縛中</span><span>点線の丸＝移動予定</span></div>`;
 }
 
 /* ---------- 準備 ---------- */
