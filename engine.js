@@ -5,7 +5,7 @@
 (function (root) {
 "use strict";
 const E = {};
-E.VERSION = "テスト版 v1.12";
+E.VERSION = "テスト版 v1.13";
 
 /* ---------- 乱数（ゲームごとの種から作る。同じ種＋同じ操作なら同じ結果） ---------- */
 let RNG = null;
@@ -88,7 +88,7 @@ const SKILLS = {
   sprint: { name: "全力疾走", ct: 2, text: "このターン、次に振るサイコロの出目に+3する" },
   net: { name: "包囲網", ct: 3, text: "このターンの捕縛は、選んだマスの上下左右1マスも対象になる" },
   block: { name: "封鎖", ct: 3, text: "階段を1か所選ぶ。2ターンの間、怪盗も探偵もその階段を使えない", target: "stair" },
-  seize: { name: "証拠押収", ct: 2, text: "捕縛中の怪盗を1人選ぶ。その怪盗の解放に必要な作業が1ターン分増える", target: "captured" },
+  seize: { name: "証拠押収", ct: 2, text: "捕縛中の怪盗を1人選ぶ。その怪盗の解放に必要な作業が1ターン分増える（同じ捕縛には1回まで。解放されて再び捕まえたら、また使える）", target: "captured" },
   jump: { name: "階段跳び", ct: 2, text: "今いるマスの真上か真下のマスへ移動する（移動力を使わない。サイコロを振る前に使う）" },
   secure: { name: "セキュリティ強化", ct: 0, text: "財宝のマスにいるとき、その財宝の解除段階を1つ増やす（1つの財宝につき1ラウンド1回）。使うと探偵の位置が全員に分かる" },
   alarmdev: { name: "警報器", ct: 3, text: "今いるマスに警報器を仕掛ける（怪盗には見えない）。怪盗がそのマスに止まると、探偵に知らされる（踏んだ怪盗にも分かる）" },
@@ -394,7 +394,7 @@ function isSafe(g, p) { const th = p.th; return th && g.stage === "thief" && th.
 E.isSafe = isSafe;
 function capture(g, p, why, dk) {
   const th = p.th; const d = det(g);
-  th.status = "captured"; th.rel = 0; th.relNeed = 2; th.relBy = []; th.pendingRecv = null;
+  th.status = "captured"; th.rel = 0; th.relNeed = 2; th.relBy = []; th.pendingRecv = null; th.seized = false;
   g.prints = g.prints.filter(x => x.pid !== p.id);
   d.det.capN++; d.det.capBy = d.det.capBy || {}; d.det.capBy[p.id] = (d.det.capBy[p.id] || 0) + 1; if (!d.det.captured.includes(p.id)) d.det.captured.push(p.id);
   const how = { meet: "探偵と鉢合わせして", det: "探偵に", ambush: "張り込み中の探偵に", disguise: "変装を見破られて" }[why] || "";
@@ -627,7 +627,9 @@ function useSkill(g, p, a) {
     log(g, "all", `${nm(sp[0])}／${nm(sp[1])} の階段が封鎖されました（${g.turn + 2}ターン目の終わりまで）`);
   } else if (a.id === "seize") {
     const c = P(g, a.pid); if (!c || !c.th || c.th.status !== "captured") return "捕縛中の怪盗を選んでください";
-    c.th.relNeed++; msg = `証拠押収：${c.name}の解放に必要な作業が${c.th.relNeed}ターン分になりました`; log(g, "all", `${c.name}の証拠が押収されました（解放に必要な作業 ${c.th.relNeed}）`);
+    if (c.th.seized) return `${c.name}の証拠はもう押収しています（同じ捕縛には1回まで）`;
+    c.th.seized = true; c.th.relNeed++;
+    thieves(g).filter(q => q.th.status !== "escaped").forEach(q => note(g, q.id, "📁", q.id === c.id ? "証拠を押収された！" : `${c.name}の証拠が押収された！`, [`${c.name}の解放に必要な作業が${c.th.relNeed}ターン分に増えました（今 ${Math.min(c.th.rel, c.th.relNeed)}/${c.th.relNeed}）`], "bad")); msg = `証拠押収：${c.name}の解放に必要な作業が${c.th.relNeed}ターン分になりました`; log(g, "all", `${c.name}の証拠が押収されました（解放に必要な作業 ${c.th.relNeed}）`);
   } else if (a.id === "jump") {
     if (d.tp.roll != null || d.tp.stay) return "階段跳びは、サイコロを振る前に使います"; const from = d.k; d.k = otherFloor(d.k); msg = `階段跳び：${nm(from)} → ${nm(d.k)}`;
   } else if (a.id === "secure") {
@@ -819,7 +821,7 @@ function viewFor(g, pid) {
     v: g.v, gid: g.gid, phase: g.phase, round: g.round, rounds: g.rounds, turn: g.turn, stage: g.stage, step: g.step, opt: g.opt, undos: g.undos,
     building: bld(g).name, bid: g.building || "museum", detId: g.detId, me: pid, role, roundEndWhy: g.roundEndWhy,
     players: g.players.map(p => ({ id: p.id, name: p.name, color: p.color, money: p.money, debt: p.debt, connected: p.connected, role: p.det ? "det" : p.th ? "thief" : null,
-      status: p.th ? p.th.status : null, heliCall: p.th ? p.th.heliCall : null, declared: p.th ? p.th.declared : null, totalDet: p.total ? p.total.det : 0,
+      status: p.th ? p.th.status : null, seized: p.th ? !!p.th.seized : false, heliCall: p.th ? p.th.heliCall : null, declared: p.th ? p.th.declared : null, totalDet: p.total ? p.total.det : 0,
       notice: p.th && (p.th.declared || reveal || p.id === pid) ? p.th.notice : null, noticeOK: p.th && reveal ? !!p.th.noticeOK : null,
       capK: p.th && p.th.status === "captured" ? p.th.k : null, rel: p.th && p.th.status === "captured" ? p.th.rel : null, relNeed: p.th ? p.th.relNeed : null,
       itemCount: p.th ? p.th.items.length : null })),

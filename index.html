@@ -846,7 +846,7 @@ function openSkills(){
         const dis=d0.blackout||cd>0?"disabled":"";
         if(s.target==="area")ctl=`<div class="row" style="margin-top:6px">${"ABCDEFGH".split("").map(a=>`<button data-sk="${id}" data-area="${a}" ${dis}>${a}</button>`).join("")}</div>`;
         else if(s.target==="stair")ctl=`<div class="row" style="margin-top:6px">${E.bld({building:v.bid}).stairs.map((p,i)=>`<button data-sk="${id}" data-stair="${i}" ${dis}>${E.nm(p[0])}／${E.nm(p[1])}</button>`).join("")}</div>`;
-        else if(s.target==="captured"){const cs=v.players.filter(p=>p.status==="captured");ctl=cs.length?`<div class="row" style="margin-top:6px">${cs.map(p=>`<button data-sk="${id}" data-pid="${p.id}" ${dis}>${esc(p.name)}</button>`).join("")}</div>`:`<div class="sub">捕縛中の怪盗がいません</div>`}
+        else if(s.target==="captured"){const cs=v.players.filter(p=>p.status==="captured");ctl=cs.length?`<div class="row" style="margin-top:6px">${cs.map(p=>`<button data-sk="${id}" data-pid="${p.id}" ${dis||(id==="seize"&&p.seized)?"disabled":""}>${esc(p.name)}${id==="seize"&&p.seized?"（押収済み）":""}</button>`).join("")}</div>`:`<div class="sub">捕縛中の怪盗がいません</div>`}
         else ctl=`<div class="row" style="margin-top:6px"><button class="primary" data-sk="${id}" ${dis}>使う</button></div>`;
       }
       return `<div class="card"><b>${esc(s.name)}</b> <span class="pill">${s.ct?`使ったあと${s.ct}ターン休み`:"1財宝1回"}</span>${cd>0?` <span class="pill">あと${cd}ターン</span>`:""}<div class="sub">${esc(s.text)}</div>${ctl}</div>`}).join("");
