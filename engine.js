@@ -5,7 +5,7 @@
 (function (root) {
 "use strict";
 const E = {};
-E.VERSION = "テスト版 v1.15";
+E.VERSION = "テスト版 v1.16";
 
 /* ---------- 乱数（ゲームごとの種から作る。同じ種＋同じ操作なら同じ結果） ---------- */
 let RNG = null;
@@ -71,7 +71,7 @@ const NOTICES = {
 const ITEMS = {
   shoes: { name: "俊足シューズ", text: "このターン、サイコロの出目に+2する（サイコロを振る前に使う）" },
   key: { name: "万能鍵", text: "このターンのセキュリティ解除は、当たり目が1つ広がる（例：5〜6→4〜6）" },
-  bond: { name: "仲間の絆", text: "捕まった仲間のマスを移動先に選んでから使う。行動を使わずに、そのマスの仲間を次のターンの始めに解放する（証拠押収されていても解放できる）" },
+  bond: { name: "仲間の絆", text: "捕まった仲間のマスを移動先に選んでから使う。そのマスの仲間1人を、その場ですぐ解放する（行動を使わない。証拠押収されていても解放できる）。解放された仲間は、このターンから動ける" },
   rope: { name: "縄抜け", text: "捕縛されているときに使うと、自力で抜け出せる（そのターンから動ける）" },
   decoy: { name: "陽動", text: "財宝のマスを1つ選ぶ。このターンの終わりに、その財宝で警報が鳴ったように全員に表示される（探偵には本物と区別できない。探偵がそのマスを調べれば失敗回数で見抜ける）", target: true },
   fake: { name: "偽の足跡", text: "好きなマスを選んで、自分の色の足跡を1つ置く。このターンは本当の足跡を残さない", target: true },
@@ -309,8 +309,18 @@ function thiefAct(g, p, a) {
     else if (it === "key") tp.use.key = true;
     else if (it === "bond") {
       if (tp.dest == null) return "仲間の絆は、捕まった仲間のマスを移動先に選んでから使います";
-      if (!thieves(g).some(q => q.id !== p.id && q.th.status === "captured" && q.th.k === tp.dest)) return "移動先のマスに、捕まった仲間がいません";
+      const cs = thieves(g).filter(q => q.id !== p.id && q.th.status === "captured" && q.th.k === tp.dest);
+      if (!cs.length) return "移動先のマスに、捕まった仲間がいません";
+      const c = a.pid ? cs.find(q => q.id === a.pid) : (cs.length === 1 ? cs[0] : null);
+      if (!c) return "解放する仲間を1人選んでください";
       tp.use.bond = true;
+      // その場ですぐ解放：このターンから動ける
+      c.th.status = "active"; c.th.rel = 0; c.th.relNeed = relBase(g); c.th.relBy = []; c.th.safeT = g.turn; c.th.safeK = c.th.k;
+      c.th.tp = { done: false, roll: null, stay: false, dest: null, use: {} };
+      th.rescues++;
+      log(g, "all", `${c.name}が解放されました（${nm(c.th.k)}）`); alog(g, p.id, "仲間の絆", { detail: c.name, to: nm(c.th.k) });
+      note(g, c.id, "🤝", `${p.name}の「仲間の絆」で解放された！このターンから動けます`, [`場所：${nm(c.th.k)}`, "この怪盗のターンは、このマスにいる限り探偵と同じマスでも捕まりません（探偵のターンには捕まえられることがあります）"], "good");
+      note(g, p.id, "🤝", `仲間の絆：${c.name}を解放した！`, [`救出ボーナス +${MONEY.rescue}万円`, "移動先はもう変えられません"], "good");
     }
     else if (it === "decoy") {
       const tr = g.tr.find(t => t.k === a.k && !t.taken);
@@ -473,13 +483,6 @@ function resolveThieves(g) {
   // 行動
   for (const p of ts) {
     const th = p.th, tp = th.tp; if (th.status !== "active") continue;
-    // 仲間の絆：行動を使わずに、同じマスの捕まった仲間を次のターンの始めに解放する
-    if (tp.use.bond) thieves(g).filter(q => q.id !== p.id && q.th.status === "captured" && q.th.k === th.k).forEach(c => {
-      c.th.rel = c.th.relNeed; c.th.relBy.push(p.id);
-      log(g, "th", `${p.name}が「仲間の絆」で ${c.name} を助けました（次のターンの始めに解放）`); alog(g, p.id, "仲間の絆", { detail: c.name, to: nm(th.k) });
-      note(g, p.id, "🤝", `仲間の絆：${c.name}を助けた`, ["次のターンの始めに解放されます"], "good");
-      note(g, c.id, "🤝", `${p.name}の「仲間の絆」で助けられた`, ["次のターンの始めに解放されます"], "good");
-    });
     if (tp.act === "unlock") {
       const tr = g.tr.find(t => !t.taken && t.k === th.k); if (!tr) continue;
       const roll = d6(); const tgt = tr.target - (tp.use.key ? 1 : 0); th.stats.unlockTry++;

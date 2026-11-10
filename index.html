@@ -833,6 +833,10 @@ function openItems(){
   const d=dlg(h);
   d.querySelectorAll("[data-useitem]").forEach(b=>b.onclick=()=>{const it=b.dataset.useitem;d.close();
     if(E.ITEMS[it].target){S.ui.itemTarget=it;render();toast(it==="decoy"?"警報を鳴らしたように見せる財宝のマスを選んでください":"マップでマスを選んでください");return}
+    if(it==="bond"){const vv=V();const me=vv.thieves.find(t=>t.id===vv.me);const dest=vv.my&&vv.my.tp?vv.my.tp.dest:null;
+      const cs=dest==null?[]:vv.thieves.filter(t=>t.id!==vv.me&&t.status==="captured"&&t.k===dest);
+      if(cs.length>1){const d2=dlg(`<h2 style="margin-top:0">仲間の絆</h2><div class="sub">解放する仲間を1人選んでください。</div><div class="row" style="margin-top:8px">${cs.map(t=>`<button class="primary" data-bond="${t.id}">${esc(pname(t.id))}</button>`).join("")}</div>`);
+        d2.querySelectorAll("[data-bond]").forEach(x=>x.onclick=()=>{d2.close();doAct({kind:"useItem",item:"bond",pid:x.dataset.bond})});return}}
     doAct({kind:"useItem",item:it})});
 }
 function openSkills(){

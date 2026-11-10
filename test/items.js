@@ -19,12 +19,12 @@ const detPass = (g, d) => { for (let i = 0; i < 2 && g.stage === "det"; i++) { E
 {
   const { g, d, ts } = setup(); const [a, b, c] = ts;
   stayAll(g, ts);
-  // 探偵が a を捕まえて証拠押収
-  ts.forEach(p => p.th.items = []); // 縄抜けを持っていると「待つ」の確定が要るので、空にしておく
-  d.det.k = a.th.k; b.th.k = a.th.k + 1; c.th.k = a.th.k + 2;
+  ts.forEach(p => p.th.items = []);
+  // 探偵が包囲網なしで a と c を同じマスで捕まえ、a の証拠を押収
+  d.det.k = a.th.k; c.th.k = a.th.k; b.th.k = a.th.k + 1;
   E.safeApply(g, d.id, { kind: "stay" }); E.safeApply(g, d.id, { kind: "act", act: "capture" });
   E.safeApply(g, d.id, { kind: "skill", id: "seize", pid: a.id });
-  check(a.th.status === "captured" && a.th.relNeed === 2, "捕縛＋押収の準備ができていない");
+  check(a.th.status === "captured" && c.th.status === "captured" && a.th.relNeed === 2, "捕縛＋押収の準備ができていない");
   d.det.k = (a.th.k + 40) % 128; detPass(g, d);
   check(g.stage === "thief", "怪盗のターンにならない");
   b.th.items = ["bond"];
@@ -32,17 +32,22 @@ const detPass = (g, d) => { for (let i = 0; i < 2 && g.stage === "det"; i++) { E
   E.safeApply(g, b.id, { kind: "roll" });
   E.safeApply(g, b.id, { kind: "dest", k: b.th.k });
   check(!!E.safeApply(g, b.id, { kind: "useItem", item: "bond" }), "仲間がいないマスで使えてしまう");
+  b.th.tp.roll = 6; check(!E.safeApply(g, b.id, { kind: "dest", k: a.th.k }), "仲間のマスを選べない");
+  check(!!E.safeApply(g, b.id, { kind: "useItem", item: "bond" }), "2人いるのに、選ばずに使えてしまう");
   check(b.th.items.includes("bond"), "使えなかったのにカードが減った");
-  b.th.tp.roll = 6; const e1 = E.safeApply(g, b.id, { kind: "dest", k: a.th.k }); check(!e1, "仲間のマスを選べない " + e1);
-  check(!E.safeApply(g, b.id, { kind: "useItem", item: "bond" }), "仲間の絆が使えない");
-  check(!!E.safeApply(g, b.id, { kind: "dest", k: b.th.k }), "使ったあとに移動先を変えられてしまう");
-  E.safeApply(g, b.id, { kind: "confirm", act: "none" });
-  E.safeApply(g, c.id, { kind: "stay" }); E.safeApply(g, c.id, { kind: "confirm", act: "none" });
-  check(a.th.rel >= a.th.relNeed, "押収されていると解放できない");
-  check(E.viewFor(g, a.id).notes.some(n => /仲間の絆/.test(n.title)), "助けられた本人に通知がない");
-  detPass(g, d);
-  check(a.th.status === "active", "次のターンの始めに解放されない: " + a.th.status);
+  check(!E.safeApply(g, b.id, { kind: "useItem", item: "bond", pid: a.id }), "仲間の絆が使えない");
+  check(a.th.status === "active", "その場ですぐ解放されない（押収されていても解放できるはず）");
+  check(c.th.status === "captured", "選んでいない仲間まで解放された");
   check(b.th.rescues === 1, "救出ボーナスが数えられていない");
+  check(E.pendingIds(g).includes(a.id), "解放された仲間がこのターンに動けない");
+  check(E.viewFor(g, a.id).notes.some(n => /仲間の絆/.test(n.title)), "助けられた本人に通知がない");
+  check(!!E.safeApply(g, b.id, { kind: "dest", k: b.th.k }), "使ったあとに移動先を変えられてしまう");
+  // 解放された a はこのターンに動ける
+  check(!E.safeApply(g, a.id, { kind: "roll" }), "解放された仲間がサイコロを振れない");
+  const r = E.reach(g, a.th.k, a.th.tp.roll); const to = r.find(k => k !== a.th.k) ?? a.th.k;
+  E.safeApply(g, a.id, { kind: "dest", k: to }); E.safeApply(g, a.id, { kind: "confirm", act: "none" });
+  E.safeApply(g, b.id, { kind: "confirm", act: "none" });
+  check(g.stage === "det" && a.th.k === to && a.th.status === "active", "解放された仲間の移動が反映されない: " + g.stage);
 }
 // --- 陽動 ---
 {
