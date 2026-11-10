@@ -20,7 +20,7 @@ for (const n of [3, 4, 5, 6]) { let dup = 0, hands = 0, wire = 0;
   for (let s = 1; s <= 200; s++) { const { ts } = setup(n, s * 7 + n); ts.forEach(p => { hands++; if (new Set(p.th.items).size !== p.th.items.length) dup++; wire += p.th.items.filter(x => x === "wire").length; }); }
   check(dup === 0, `${n}人：重複した手札が ${dup}/${hands}`); check(wire <= 200, `${n}人：ワイヤー銃が1ゲームに2枚以上`); }
 // 2) 解除の当たり目
-check(E.TR.low.target === 2 && E.TR.mid.target === 4 && E.TR.high.target === 5 && E.TR.high.need === 2, "解除の当たり目が違う");
+check(E.TR.low.target === 2 && E.TR.mid.target === 4 && E.TR.high.target === 4 && E.TR.high.need === 2, "解除の当たり目が違う");
 // 3) 抜け出しサイコロ：成功も失敗も起きる。失敗したらそのターンはもう振れない
 { let suc = 0, fail = 0;
   for (let s = 1; s <= 120; s++) {
@@ -42,32 +42,36 @@ check(E.TR.low.target === 2 && E.TR.mid.target === 4 && E.TR.high.target === 5 &
   E.safeApply(g, d.id, { kind: "stay" }); E.safeApply(g, d.id, { kind: "act", act: "capture" }); d.det.k = (a.th.k + 40) % 128; detPass(g, d);
   check(!!E.safeApply(g, a.id, { kind: "breakout" }), "「なし」なのに挑戦できる");
 }
-// 4) ヘリ：呼んだターンの怪盗のターン中は探偵に分からず、探偵のターンの始めに知らされる。裏口もそのとき開く
+// 4) ヘリ：呼んだターンは探偵に分からず、次のターンの探偵のターンの始めに知らされる。裏口もそのとき開く
 {
   const { g, d, ts } = setup(4, 77); const [a, b, c] = ts;
   ts.forEach(p => stay(g, p)); detPass(g, d); // 1ターン目
-  E.safeApply(g, a.id, { kind: "heli" });
-  const dv = E.viewFor(g, d.id);
-  check(dv.players.find(p => p.id === a.id).heliCall == null, "怪盗のターン中に、探偵にヘリが分かってしまう");
-  check(!dv.log.some(l => /ヘリ/.test(l.m)), "怪盗のターン中に、探偵のログにヘリが出ている");
+  const T = g.turn;
+  E.safeApply(g, a.id, { kind: "heli" }); E.safeApply(g, b.id, { kind: "heli" }); E.safeApply(g, c.id, { kind: "heli" });
+  const hidden = () => { const v = E.viewFor(g, d.id); return v.players.find(p => p.id === a.id).heliCall == null && !v.log.some(l => /ヘリ/.test(l.m)) && !v.notes.some(n => /ヘリ/.test(n.title)); };
+  check(hidden(), "呼んだターンの怪盗のターン中に、探偵にヘリが分かってしまう");
   check(E.viewFor(g, b.id).log.some(l => /ヘリを呼びました/.test(l.m)), "仲間にヘリが伝わっていない");
-  E.safeApply(g, b.id, { kind: "heli" }); E.safeApply(g, c.id, { kind: "heli" });
-  check(!g.backOpen, "全員が呼んだ瞬間に裏口が開いてしまう（探偵のターンの始めのはず）");
   ts.forEach(p => stay(g, p));
-  check(g.stage === "det", "探偵のターンにならない");
+  check(g.stage === "det" && g.turn === T && hidden() && !g.backOpen, "呼んだターンの探偵のターンに、もう知らされている");
+  detPass(g, d);
+  check(g.stage === "thief" && g.turn === T + 1 && hidden() && !g.backOpen, "次のターンの怪盗のターン中に、もう知らされている");
+  ts.forEach(p => stay(g, p));
+  check(g.stage === "det" && g.turn === T + 1, "次のターンの探偵のターンにならない");
   const dv2 = E.viewFor(g, d.id);
   check(dv2.notes.filter(n => /ヘリの音が近づいて/.test(n.title)).length === 3, "探偵に「ヘリの音」のポップアップが3人分出ていない");
-  check(dv2.players.find(p => p.id === a.id).heliCall === g.turn, "探偵のターンになってもヘリが見えない");
-  check(dv2.log.some(l => /ヘリの音が近づいて/.test(l.m)), "探偵のログにヘリが出ていない");
-  check(g.backOpen, "探偵のターンの始めに裏口が開かない");
+  check(dv2.notes.some(n => n.lines.some(l => l.includes(`${T + 2}ターン目の始めに到着`))), "到着ターンの表示が違う");
+  check(dv2.players.find(p => p.id === a.id).heliCall === T, "知らされたあともヘリが見えない");
+  check(g.backOpen, "知らされたときに裏口が開かない");
   check(E.viewFor(g, a.id).notes.some(n => /裏口が開いた/.test(n.title)) && dv2.notes.some(n => /裏口が開いた/.test(n.title)), "裏口が開いた通知がない");
+  detPass(g, d);
+  check(g.turn === T + 2 && E.viewFor(g, d.id).notes.some(n => /ヘリが屋上に到着/.test(n.title)), "到着の通知が探偵に出ない");
 }
 // 5) 2人だけ呼んだときは裏口は開かない
 {
   const { g, d, ts } = setup(4, 78); const [a, b, c] = ts;
   ts.forEach(p => stay(g, p)); detPass(g, d);
   E.safeApply(g, a.id, { kind: "heli" }); E.safeApply(g, b.id, { kind: "heli" });
-  ts.forEach(p => stay(g, p));
-  check(!g.backOpen, "全員が呼んでいないのに裏口が開いた");
+  ts.forEach(p => stay(g, p)); detPass(g, d); ts.forEach(p => stay(g, p));
+  check(g.stage === "det" && !g.backOpen, "全員が呼んでいないのに裏口が開いた");
 }
 console.log(`v1.17 test: ok ${ok} / ng ${ng}`); process.exit(ng ? 1 : 0);

@@ -918,7 +918,7 @@ function bind(){
   document.querySelectorAll("[data-tstart]").forEach(b=>b.onclick=()=>{S.ui.tstart=+b.dataset.tstart;render()});
   // 怪盗
   on("broll",()=>doAct({kind:"roll"}));on("bstay",()=>doAct({kind:"stay"}));
-  on("bheli",()=>{if(confirm("ヘリを呼びますか？（1ラウンド1回・次の探偵のターンの始めに探偵に知らされます）"))doAct({kind:"heli"})});
+  on("bheli",()=>{if(confirm("ヘリを呼びますか？（1ラウンド1回・次のターンの探偵のターンの始めに、探偵に知らされます）"))doAct({kind:"heli"})});
   on("bbreak",()=>doAct({kind:"breakout"}));
   on("bredest",()=>{S.ui.redest=true;toast("光っているマスから選び直してください")});
   document.querySelectorAll("[data-act]").forEach(b=>b.onclick=()=>{S.ui.act=b.dataset.act;render()});

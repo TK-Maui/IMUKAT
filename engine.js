@@ -5,7 +5,7 @@
 (function (root) {
 "use strict";
 const E = {};
-E.VERSION = "テスト版 v1.17";
+E.VERSION = "テスト版 v1.18";
 
 /* ---------- 乱数（ゲームごとの種から作る。同じ種＋同じ操作なら同じ結果） ---------- */
 let RNG = null;
@@ -55,7 +55,7 @@ function fixedList(g) { const b = bld(g); return [b.front, b.back, ...b.stairs.f
 E.bld = bld; E.BUILDINGS = BUILDINGS;
 
 const TR = {
-  high: { label: "高", value: 1500, need: 2, target: 5 },
+  high: { label: "高", value: 1500, need: 2, target: 4 },
   mid: { label: "普通", value: 600, need: 1, target: 4 },
   low: { label: "安", value: 300, need: 1, target: 2 },
 };
@@ -274,9 +274,9 @@ function startDetTurn(g) {
   d.net = false;
   d.tp = { roll: null, stay: false, dest: null };
   // ヘリを呼んだターンの探偵のターンに、探偵へ知らせる
-  thieves(g).filter(p => p.th.heliCall === g.turn && p.th.status !== "escaped").forEach(p => {
-    log(g, "all", `🚁 ヘリの音が近づいてきている…${p.name}がヘリを呼びました（${g.turn + 2}ターン目の始めに到着・${g.turn + 3}ターン目の終わりまで待機）`);
-    note(g, g.detId, "🚁", "ヘリの音が近づいてきている…", [`${p.name}がヘリを呼びました`, `${g.turn + 2}ターン目の始めに到着し、${g.turn + 3}ターン目の終わりまで屋上で待ちます`, `屋上階段（${bld(g).roof.map(nm).join("・")}）で待ち伏せるチャンスです`], "info"); });
+  thieves(g).filter(p => p.th.heliCall === g.turn - 1 && p.th.status !== "escaped").forEach(p => {
+    log(g, "all", `🚁 ヘリの音が近づいてきている…${p.name}がヘリを呼んでいます（${g.turn + 1}ターン目の始めに到着・${g.turn + 2}ターン目の終わりまで待機）`);
+    note(g, g.detId, "🚁", "ヘリの音が近づいてきている…", [`${p.name}がヘリを呼んでいます`, `${g.turn + 1}ターン目の始めに到着し、${g.turn + 2}ターン目の終わりまで屋上で待ちます`, `屋上階段（${bld(g).roof.map(nm).join("・")}）で待ち伏せるチャンスです`], "info"); });
   checkBackDoor(g); // 裏口は、最後の怪盗のヘリが探偵に知らされたときに開く
   if (d.blackout) log(g, "det", "停電中：このターンはスキルを使えません");
 }
@@ -372,7 +372,7 @@ function thiefAct(g, p, a) {
     if (th.status !== "active") return "今はヘリを呼べません";
     if (th.heliCall != null) return "ヘリはこのラウンドでもう呼んでいます";
     th.heliCall = g.turn;
-    log(g, "th", `${p.name}がヘリを呼びました（${g.turn + 2}ターン目の始めに到着・${g.turn + 3}ターン目の終わりまで待機。探偵には、次の探偵のターンの始めに知らされます）`);
+    log(g, "th", `${p.name}がヘリを呼びました（${g.turn + 2}ターン目の始めに到着・${g.turn + 3}ターン目の終わりまで待機。探偵には、次のターン（${g.turn + 1}ターン目）の探偵のターンの始めに知らされます）`);
     alog(g, p.id, "ヘリを呼ぶ", { from: nm(th.k) });
     return null;
   }
@@ -471,11 +471,12 @@ function escape(g, p, how) {
   alog(g, p.id, "脱出", { detail: how, to: nm(th.k), result: th.loot.map(id => g.tr.find(t => t.id === id).name).join("・") });
   note(g, p.id, "🎉", `${hw}脱出成功！`, [th.loot.length ? `持ち出した財宝：${th.loot.map(id => g.tr.find(t => t.id === id).name).join("・")}` : "財宝は持っていません（山分けはもらえます）"], "good");
 }
+// ヘリを呼んだことが探偵に知らされているか（呼んだ次のターンの、探偵のターンの始めに知らされる）
+function heliKnown(g, th) { return th.heliCall != null && (th.heliCall < g.turn - 1 || (th.heliCall === g.turn - 1 && g.stage === "det")); }
 function checkBackDoor(g) {
   if (g.backOpen) return;
   const act = thieves(g).filter(p => p.th.status === "active");
-  // このターンに呼んだばかりのヘリは、探偵のターンの始めに知らされるまで数えない
-  if (act.length && act.every(p => p.th.heliCall != null && (p.th.heliCall < g.turn || g.stage === "det"))) {
+  if (act.length && act.every(p => heliKnown(g, p.th))) {
     g.backOpen = true; log(g, "all", "捕縛されていない怪盗全員がヘリを呼んだので、裏口が開きました（変装していれば裏口からも脱出できます）");
     g.players.forEach(q => note(g, q.id, "🚪", "裏口が開いた！", [`まだ建物にいる怪盗全員がヘリを呼びました`, `変装していれば、裏口（${nm(bld(g).back)}）からも脱出できます`], "info"));
   }
@@ -889,7 +890,7 @@ function viewFor(g, pid) {
     v: g.v, gid: g.gid, phase: g.phase, round: g.round, rounds: g.rounds, turn: g.turn, stage: g.stage, step: g.step, opt: g.opt, undos: g.undos,
     building: bld(g).name, bid: g.building || "museum", detId: g.detId, me: pid, role, roundEndWhy: g.roundEndWhy,
     players: g.players.map(p => ({ id: p.id, name: p.name, color: p.color, money: p.money, debt: p.debt, connected: p.connected, role: p.det ? "det" : p.th ? "thief" : null,
-      status: p.th ? p.th.status : null, seized: p.th ? !!p.th.seized : false, heliCall: p.th && !(role === "det" && !reveal && g.stage === "thief" && p.th.heliCall === g.turn) ? p.th.heliCall : null, declared: p.th ? p.th.declared : null, totalDet: p.total ? p.total.det : 0,
+      status: p.th ? p.th.status : null, seized: p.th ? !!p.th.seized : false, heliCall: p.th && !(role === "det" && !reveal && !heliKnown(g, p.th)) ? p.th.heliCall : null, declared: p.th ? p.th.declared : null, totalDet: p.total ? p.total.det : 0,
       notice: p.th && (p.th.declared || reveal || p.id === pid) ? p.th.notice : null, noticeOK: p.th && reveal ? !!p.th.noticeOK : null,
       capK: p.th && p.th.status === "captured" ? p.th.k : null, rel: p.th && p.th.status === "captured" ? p.th.rel : null, relNeed: p.th ? p.th.relNeed : null,
       itemCount: p.th ? p.th.items.length : null })),
