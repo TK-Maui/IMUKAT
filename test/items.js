@@ -47,6 +47,7 @@ const detPass = (g, d) => { for (let i = 0; i < 2 && g.stage === "det"; i++) { E
   const r = E.reach(g, a.th.k, a.th.tp.roll); const to = r.find(k => k !== a.th.k) ?? a.th.k;
   E.safeApply(g, a.id, { kind: "dest", k: to }); E.safeApply(g, a.id, { kind: "confirm", act: "none" });
   E.safeApply(g, b.id, { kind: "confirm", act: "none" });
+  E.safeApply(g, c.id, { kind: "confirm" }); // 捕まったままの c は「このターンは待つ」
   check(g.stage === "det" && a.th.k === to && a.th.status === "active", "解放された仲間の移動が反映されない: " + g.stage);
 }
 // --- 陽動 ---

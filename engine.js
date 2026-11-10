@@ -5,7 +5,7 @@
 (function (root) {
 "use strict";
 const E = {};
-E.VERSION = "テスト版 v1.16";
+E.VERSION = "テスト版 v1.17";
 
 /* ---------- 乱数（ゲームごとの種から作る。同じ種＋同じ操作なら同じ結果） ---------- */
 let RNG = null;
@@ -56,8 +56,8 @@ E.bld = bld; E.BUILDINGS = BUILDINGS;
 
 const TR = {
   high: { label: "高", value: 1500, need: 2, target: 5 },
-  mid: { label: "普通", value: 600, need: 1, target: 5 },
-  low: { label: "安", value: 300, need: 1, target: 4 },
+  mid: { label: "普通", value: 600, need: 1, target: 4 },
+  low: { label: "安", value: 300, need: 1, target: 2 },
 };
 const PARTS = { uniform: "警備員の制服", mask: "変装マスク", badge: "社員証", baton: "警棒" };
 const PART_KEYS = Object.keys(PARTS);
@@ -101,7 +101,7 @@ E.MONEY = MONEY;
 
 function defaultOpt() {
   return { turns: 12, thiefTimer: true, thiefSec: 30, detTimer: false, detSec: 90, items: true, skills: true,
-    capture: "land", partsNeed: 3, alarmFails: 2, startMoneyPer: 100, itemN: null, trN: null, relTurns: 1 };
+    capture: "land", partsNeed: 3, alarmFails: 2, startMoneyPer: 100, itemN: null, trN: null, relTurns: 1, breakout: 6 }; // breakout：捕縛中の脱出サイコロ（この目以上で成功。0＝なし）
 }
 const relBase = g => (g && g.opt && g.opt.relTurns) || 1; // 解放に必要な作業（ターン数）
 E.relBase = relBase;
@@ -204,12 +204,17 @@ function startRound(g) {
   const sc = scaleFor(g);
   let deck = shuffle(ITEM_DECK());
   while (deck.length < sc.items * sc.nT) deck = shuffle(ITEM_DECK().filter(x => x !== "wire")).concat(deck); // 足りなければワイヤー銃以外をもう1組
+  // 1人の手札に同じアイテムが重ならないように配る（重なったカードは山札の下に戻して引き直す）
+  const dealHand = n => { const hand = []; let tries = deck.length;
+    while (hand.length < n && deck.length && tries-- > 0) { const c = deck.pop(); if (hand.includes(c)) deck.unshift(c); else hand.push(c); }
+    while (hand.length < n && deck.length) hand.push(deck.pop()); // どうしても足りないときだけ重複を許す
+    return hand; };
   let ni = 0;
   g.players.forEach(p => {
     if (p.id === g.detId) {
       p.det = { k: null, skills: [], cd: {}, ready: false, ambush: null, captured: [], capN: 0, capBy: {}, sprint: 0, net: false, blackout: false, secured: [], info: [], known: { tr: {}, parts: {} } };
     } else {
-      p.th = { k: null, status: "active", loot: [], parts: {}, items: g.opt.items ? Array.from({ length: sc.items }, () => deck.pop()).filter(Boolean) : [], notice: notices[ni++ % notices.length], declared: null,
+      p.th = { k: null, status: "active", loot: [], parts: {}, items: g.opt.items ? dealHand(sc.items) : [], notice: notices[ni++ % notices.length], declared: null,
         heliCall: null, escTurn: null, escHow: null, escK: null, rescues: 0, alarmTrig: false, rel: 0, relNeed: relBase(g), relBy: [], pendingRecv: null, tp: null, stats: { moves: 0, stays: 0, unlockTry: 0, unlockOk: 0, fails: 0, timeouts: 0, items: 0 } };
     }
   });
@@ -251,12 +256,12 @@ function startThiefTurn(g) {
   }
   for (const p of thieves(g)) {
     const h = p.th.heliCall;
-    if (h != null && g.turn === h + 2 && p.th.status === "active") { log(g, "all", `${p.name}のヘリが屋上に到着しました（${h + 3}ターン目の終わりまで待機）`); note(g, p.id, "🚁", "ヘリが屋上に到着！", [`${h + 3}ターン目の終わりまで、屋上階段（${bld(g).roof.map(nm).join("・")}）にいれば脱出できます`], "info"); }
+    if (h != null && g.turn === h + 2 && p.th.status === "active") { log(g, "all", `${p.name}のヘリが屋上に到着しました（${h + 3}ターン目の終わりまで待機）`); note(g, g.detId, "🚁", `${p.name}のヘリが屋上に到着した`, [`${h + 3}ターン目の終わりまで待機。屋上階段は ${bld(g).roof.map(nm).join("・")}`], "info"); note(g, p.id, "🚁", "ヘリが屋上に到着！", [`${h + 3}ターン目の終わりまで、屋上階段（${bld(g).roof.map(nm).join("・")}）にいれば脱出できます`], "info"); }
   }
   for (const p of thieves(g)) {
     const th = p.th;
     if (th.status === "active") th.tp = { done: false, roll: null, stay: false, dest: null, use: {} };
-    else if (th.status === "captured") th.tp = { done: !(th.items.includes("rope")) && thieves(g).some(q => q.th.status === "active"), roll: null, stay: true, dest: th.k, use: {}, captured: true };
+    else if (th.status === "captured") th.tp = { done: !(g.opt.breakout > 0) && !(th.items.includes("rope")) && thieves(g).some(q => q.th.status === "active"), roll: null, stay: true, dest: th.k, use: {}, captured: true, tried: false };
     else th.tp = null;
   }
   checkThiefDone(g);
@@ -268,6 +273,11 @@ function startDetTurn(g) {
   d.blackout = g.blackoutNext; g.blackoutNext = false;
   d.net = false;
   d.tp = { roll: null, stay: false, dest: null };
+  // ヘリを呼んだターンの探偵のターンに、探偵へ知らせる
+  thieves(g).filter(p => p.th.heliCall === g.turn && p.th.status !== "escaped").forEach(p => {
+    log(g, "all", `🚁 ヘリの音が近づいてきている…${p.name}がヘリを呼びました（${g.turn + 2}ターン目の始めに到着・${g.turn + 3}ターン目の終わりまで待機）`);
+    note(g, g.detId, "🚁", "ヘリの音が近づいてきている…", [`${p.name}がヘリを呼びました`, `${g.turn + 2}ターン目の始めに到着し、${g.turn + 3}ターン目の終わりまで屋上で待ちます`, `屋上階段（${bld(g).roof.map(nm).join("・")}）で待ち伏せるチャンスです`], "info"); });
+  checkBackDoor(g); // 裏口は、最後の怪盗のヘリが探偵に知らされたときに開く
   if (d.blackout) log(g, "det", "停電中：このターンはスキルを使えません");
 }
 
@@ -287,6 +297,21 @@ E.thiefOptions = thiefOptions;
 function partsDone(g, th) { return PART_KEYS.filter(t => (th.parts[t] || 0) > 0).length >= g.opt.partsNeed; }
 E.partsDone = partsDone;
 
+// 捕縛中の怪盗の抜け出し：毎ターン1回サイコロを振り、決まった目以上で自力で抜け出す
+function tryBreakout(g, p) {
+  const th = p.th, need = g.opt.breakout; const n = d6();
+  th.stats.breakTry = (th.stats.breakTry || 0) + 1;
+  if (n >= need) {
+    th.status = "active"; th.rel = 0; th.relNeed = relBase(g); th.relBy = []; th.safeT = g.turn; th.safeK = th.k;
+    th.tp = { done: false, roll: null, stay: false, dest: null, use: {} };
+    log(g, "all", `${p.name}が自力で抜け出しました（${nm(th.k)}）`); alog(g, p.id, "抜け出しに挑戦", { dice: n, to: nm(th.k), result: "成功" });
+    note(g, p.id, "🎲", `出目 ${n}！自力で抜け出した！`, ["このターンから動けます", "この怪盗のターンは、このマスにいる限り探偵と同じマスでも捕まりません（探偵のターンには捕まえられることがあります）"], "good");
+  } else {
+    th.tp.tried = true; alog(g, p.id, "抜け出しに挑戦", { dice: n, to: nm(th.k), result: "失敗" });
+    note(g, p.id, "🎲", `出目 ${n}…抜け出せなかった`, [`${need === 6 ? "6" : need + "以上"}が出れば抜け出せます。次のターンにまた挑戦できます`], "bad");
+    if (!th.items.includes("rope")) { th.tp.done = true; checkThiefDone(g); }
+  }
+}
 function thiefAct(g, p, a) {
   const th = p.th, tp = th.tp;
   if (g.stage !== "thief" || !tp) return "今は怪盗のターンではありません";
@@ -337,13 +362,18 @@ function thiefAct(g, p, a) {
     alog(g, p.id, "アイテム", { detail: ITEMS[it].name, to: a.k != null ? nm(a.k) : "" });
     return null;
   }
+  if (a.kind === "breakout") {
+    if (th.status !== "captured") return "捕縛されているときだけ挑戦できます";
+    if (!(g.opt.breakout > 0)) return "このゲームでは、サイコロでの抜け出しは使えません";
+    if (tp.tried) return "このターンはもう挑戦しました";
+    tryBreakout(g, p); return null;
+  }
   if (a.kind === "heli") {
     if (th.status !== "active") return "今はヘリを呼べません";
     if (th.heliCall != null) return "ヘリはこのラウンドでもう呼んでいます";
     th.heliCall = g.turn;
-    log(g, "all", `${p.name}がヘリを呼びました（${g.turn + 2}ターン目の始めに到着・${g.turn + 3}ターン目の終わりまで待機）`);
+    log(g, "th", `${p.name}がヘリを呼びました（${g.turn + 2}ターン目の始めに到着・${g.turn + 3}ターン目の終わりまで待機。探偵には、次の探偵のターンの始めに知らされます）`);
     alog(g, p.id, "ヘリを呼ぶ", { from: nm(th.k) });
-    checkBackDoor(g);
     return null;
   }
   if (a.kind === "give") {
@@ -444,8 +474,10 @@ function escape(g, p, how) {
 function checkBackDoor(g) {
   if (g.backOpen) return;
   const act = thieves(g).filter(p => p.th.status === "active");
-  if (act.length && act.every(p => p.th.heliCall != null)) {
+  // このターンに呼んだばかりのヘリは、探偵のターンの始めに知らされるまで数えない
+  if (act.length && act.every(p => p.th.heliCall != null && (p.th.heliCall < g.turn || g.stage === "det"))) {
     g.backOpen = true; log(g, "all", "捕縛されていない怪盗全員がヘリを呼んだので、裏口が開きました（変装していれば裏口からも脱出できます）");
+    g.players.forEach(q => note(g, q.id, "🚪", "裏口が開いた！", [`まだ建物にいる怪盗全員がヘリを呼びました`, `変装していれば、裏口（${nm(bld(g).back)}）からも脱出できます`], "info"));
   }
 }
 function ringAlarm(g, tr) {
@@ -837,7 +869,7 @@ function proxyAct(g, pid) {
   if (g.phase !== "play") return null;
   if (p.th && p.th.tp && !p.th.tp.done) {
     const tp = p.th.tp;
-    if (p.th.status === "captured") { tp.done = true; checkThiefDone(g); return null; }
+    if (p.th.status === "captured") { if (g.opt.breakout > 0 && !tp.tried) { tryBreakout(g, p); if (p.th.status !== "captured" || p.th.tp.done) return null; } p.th.tp.done = true; checkThiefDone(g); return null; }
     if (tp.dest == null) { tp.dest = p.th.k; tp.stay = true; tp.roll = 0; p.th.stats.timeouts++; }
     tp.act = "none"; tp.pick = false; tp.done = true; checkThiefDone(g); return null;
   }
@@ -857,7 +889,7 @@ function viewFor(g, pid) {
     v: g.v, gid: g.gid, phase: g.phase, round: g.round, rounds: g.rounds, turn: g.turn, stage: g.stage, step: g.step, opt: g.opt, undos: g.undos,
     building: bld(g).name, bid: g.building || "museum", detId: g.detId, me: pid, role, roundEndWhy: g.roundEndWhy,
     players: g.players.map(p => ({ id: p.id, name: p.name, color: p.color, money: p.money, debt: p.debt, connected: p.connected, role: p.det ? "det" : p.th ? "thief" : null,
-      status: p.th ? p.th.status : null, seized: p.th ? !!p.th.seized : false, heliCall: p.th ? p.th.heliCall : null, declared: p.th ? p.th.declared : null, totalDet: p.total ? p.total.det : 0,
+      status: p.th ? p.th.status : null, seized: p.th ? !!p.th.seized : false, heliCall: p.th && !(role === "det" && !reveal && g.stage === "thief" && p.th.heliCall === g.turn) ? p.th.heliCall : null, declared: p.th ? p.th.declared : null, totalDet: p.total ? p.total.det : 0,
       notice: p.th && (p.th.declared || reveal || p.id === pid) ? p.th.notice : null, noticeOK: p.th && reveal ? !!p.th.noticeOK : null,
       capK: p.th && p.th.status === "captured" ? p.th.k : null, rel: p.th && p.th.status === "captured" ? p.th.rel : null, relNeed: p.th ? p.th.relNeed : null,
       itemCount: p.th ? p.th.items.length : null })),

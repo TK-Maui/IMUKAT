@@ -36,7 +36,7 @@ for (let gi = 0; gi < N; gi++) {
     }
     if (p.th) {
       const th = p.th, tp = th.tp, b = E.bld(g);
-      if (th.status === "captured") { if (th.items.includes("rope") && rand() < 0.7) act(g, pid, { kind: "useItem", item: "rope" }); else act(g, pid, { kind: "confirm" }); continue; }
+      if (th.status === "captured") { if (g.opt.breakout > 0 && !tp.tried && rand() < 0.8) { act(g, pid, { kind: "breakout" }); continue; } if (th.items.includes("rope") && rand() < 0.7) act(g, pid, { kind: "useItem", item: "rope" }); else act(g, pid, { kind: "confirm" }); continue; }
       if (rand() < 0.1 && th.items.length) { const it = pick(th.items); act(g, pid, { kind: "useItem", item: it, k: Math.floor(rand() * 128) }); }
       if (th.heliCall == null && (th.loot.length || g.turn > 7) && rand() < 0.5) act(g, pid, { kind: "heli" });
       if (rand() < 0.05) { if (rand() < 0.2) { E.proxyAct(g, pid); continue; } }
