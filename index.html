@@ -745,7 +745,7 @@ function exitHint(v,me,k){
 }
 function teamHTML(v){
   return `<div class="panel"><b>怪盗チーム（共有マップ）</b><table>${v.thieves.map(t=>`<tr><td>${chip(t.id)}</td><td>${E.nm(t.k)}</td><td>${{active:t.tp?(t.tp.done?"✅確定":"考え中"):"",captured:"⛓捕縛中",escaped:"🏁脱出",failed:"✖失敗"}[t.status]}</td><td class="sub">${t.loot.map(id=>esc(v.tr.find(x=>x.id===id).name)).join("・")}${partsHTML(t.parts,v.opt.partsNeed,true)}</td></tr>`).join("")}</table>
-  <div class="sub">財宝のセキュリティ：${v.tr.filter(t=>!t.taken).map(t=>`${esc(t.name)}（${E.nm(t.k)}）${t.stage}/${t.need}段・失敗${t.fails}${t.alarm?"🚨":""}`).join("／")}</div>${v.floorHint?`<div class="sub">盗聴器：探偵は${v.floorHint.t}ターン目の終わりに${v.floorHint.f+1}階にいた</div>`:""}</div>`;
+  <div class="sub">財宝のセキュリティ：${v.tr.filter(t=>!t.taken).map(t=>`${esc(t.name)}（${E.nm(t.k)}）${t.stage}/${t.need}段・失敗${t.fails}${t.decoy?"🎭陽動":t.alarm?"🚨":""}`).join("／")}</div>${v.floorHint?`<div class="sub">盗聴器：探偵は${v.floorHint.t}ターン目の終わりに${v.floorHint.f+1}階にいた</div>`:""}</div>`;
 }
 function detPanel(v){
   const d=v.det;const tp=d.tp;S.ui.mapOpt={};
@@ -832,7 +832,7 @@ function openItems(){
   h+=`<details><summary class="sub">アイテム一覧（仮）</summary>${Object.values(E.ITEMS).map(I=>`<div class="sub">・<b>${esc(I.name)}</b>：${esc(I.text)}</div>`).join("")}</details>`;
   const d=dlg(h);
   d.querySelectorAll("[data-useitem]").forEach(b=>b.onclick=()=>{const it=b.dataset.useitem;d.close();
-    if(E.ITEMS[it].target){S.ui.itemTarget=it;render();toast("マップでマスを選んでください");return}
+    if(E.ITEMS[it].target){S.ui.itemTarget=it;render();toast(it==="decoy"?"警報を鳴らしたように見せる財宝のマスを選んでください":"マップでマスを選んでください");return}
     doAct({kind:"useItem",item:it})});
 }
 function openSkills(){
