@@ -5,7 +5,7 @@
 (function (root) {
 "use strict";
 const E = {};
-E.VERSION = "テスト版 v1.18";
+E.VERSION = "テスト版 v1.19";
 
 /* ---------- 乱数（ゲームごとの種から作る。同じ種＋同じ操作なら同じ結果） ---------- */
 let RNG = null;
@@ -305,10 +305,10 @@ function tryBreakout(g, p) {
     th.status = "active"; th.rel = 0; th.relNeed = relBase(g); th.relBy = []; th.safeT = g.turn; th.safeK = th.k;
     th.tp = { done: false, roll: null, stay: false, dest: null, use: {} };
     log(g, "all", `${p.name}が自力で抜け出しました（${nm(th.k)}）`); alog(g, p.id, "抜け出しに挑戦", { dice: n, to: nm(th.k), result: "成功" });
-    note(g, p.id, "🎲", `出目 ${n}！自力で抜け出した！`, ["このターンから動けます", "この怪盗のターンは、このマスにいる限り探偵と同じマスでも捕まりません（探偵のターンには捕まえられることがあります）"], "good");
+    note(g, p.id, "🎲", `出目 ${n}！自力で抜け出した！`, ["このターンから動けます", "この怪盗のターンは、このマスにいる限り探偵と同じマスでも捕まりません（探偵のターンには捕まえられることがあります）"], "good", { dice: n });
   } else {
     th.tp.tried = true; alog(g, p.id, "抜け出しに挑戦", { dice: n, to: nm(th.k), result: "失敗" });
-    note(g, p.id, "🎲", `出目 ${n}…抜け出せなかった`, [`${need === 6 ? "6" : need + "以上"}が出れば抜け出せます。次のターンにまた挑戦できます`], "bad");
+    note(g, p.id, "🎲", `出目 ${n}…抜け出せなかった`, [`${need === 6 ? "6" : need + "以上"}が出れば抜け出せます。次のターンにまた挑戦できます`], "bad", { dice: n });
     if (!th.items.includes("rope")) { th.tp.done = true; checkThiefDone(g); }
   }
 }
@@ -432,12 +432,12 @@ function checkThiefDone(g) {
 }
 /* ---------- 結果の通知（行動した本人だけにポップアップで見せる） ---------- */
 let _nid = 0;
-function note(g, to, icon, title, lines, tone) {
+function note(g, to, icon, title, lines, tone, extra) {
   g.notes = g.notes || [];
   const ids = (Array.isArray(to) ? to : [to]).filter(Boolean);
   if (!ids.length) return;
   _nid = (_nid + 1) % 1e6;
-  g.notes.push({ id: Date.now().toString(36) + "-" + _nid + "-" + Math.floor(Math.random() * 1e6).toString(36), to: ids, r: g.round, t: g.turn, icon, title, lines: (lines || []).filter(Boolean), tone: tone || "info" });
+  g.notes.push({ id: Date.now().toString(36) + "-" + _nid + "-" + Math.floor(Math.random() * 1e6).toString(36), to: ids, r: g.round, t: g.turn, icon, title, lines: (lines || []).filter(Boolean), tone: tone || "info", ...(extra || {}) });
   if (g.notes.length > 120) g.notes = g.notes.slice(-120);
 }
 E.note = note;
@@ -521,15 +521,15 @@ function resolveThieves(g) {
       const roll = d6(); const tgt = tr.target - (tp.use.key ? 1 : 0); th.stats.unlockTry++;
       if (roll >= tgt) {
         tr.stage++; th.stats.unlockOk++;
-        if (tr.stage >= tr.need) { tr.taken = true; tr.holder = p.id; th.loot.push(tr.id); log(g, "th", `${p.name}が「${tr.name}」を手に入れました`); note(g, p.id, "💎", `「${tr.name}」を手に入れた！`, [`出目 ${roll}（${tgt}以上で成功）`, `${tr.value.toLocaleString("ja-JP")}万円。脱出すれば山分けに入ります`], "good"); }
-        else { log(g, "th", `${p.name}：「${tr.name}」のセキュリティを1段階解除（${tr.stage}/${tr.need}）`); note(g, p.id, "🔐", `解除成功（${tr.stage}/${tr.need}段階）`, [`「${tr.name}」 出目 ${roll}（${tgt}以上で成功）`, `あと${tr.need - tr.stage}段階で手に入ります`], "good"); }
+        if (tr.stage >= tr.need) { tr.taken = true; tr.holder = p.id; th.loot.push(tr.id); log(g, "th", `${p.name}が「${tr.name}」を手に入れました`); note(g, p.id, "💎", `「${tr.name}」を手に入れた！`, [`出目 ${roll}（${tgt}以上で成功）`, `${tr.value.toLocaleString("ja-JP")}万円。脱出すれば山分けに入ります`], "good", { dice: roll }); }
+        else { log(g, "th", `${p.name}：「${tr.name}」のセキュリティを1段階解除（${tr.stage}/${tr.need}）`); note(g, p.id, "🔐", `解除成功（${tr.stage}/${tr.need}段階）`, [`「${tr.name}」 出目 ${roll}（${tgt}以上で成功）`, `あと${tr.need - tr.stage}段階で手に入ります`], "good", { dice: roll }); }
         alog(g, p.id, "解除", { dice: roll, detail: `${tr.name}（${tgt}以上で成功）`, to: nm(th.k), result: tr.taken ? "入手" : "1段階成功" });
       } else {
         tr.fails++; th.stats.fails++;
         log(g, "th", `${p.name}：「${tr.name}」の解除に失敗（失敗${tr.fails}回）`);
         let rang = false;
         if (tr.fails >= g.opt.alarmFails && !tr.alarm) { tr.alarm = true; th.alarmTrig = true; rang = true; if (!tr.decoy) ringAlarm(g, tr); else log(g, "th", `「${tr.name}」で本物の警報が鳴りました（陽動で鳴らしてあったので、探偵からは変わって見えません）`); }
-        note(g, p.id, rang ? "🚨" : "❌", rang ? "解除失敗…警報が鳴った！" : "解除失敗", [`「${tr.name}」 出目 ${roll}（${tgt}以上で成功）`, rang ? "財宝の場所が探偵に知られました" : `この財宝の失敗 ${tr.fails}回（${g.opt.alarmFails}回で警報）`], "bad");
+        note(g, p.id, rang ? "🚨" : "❌", rang ? "解除失敗…警報が鳴った！" : "解除失敗", [`「${tr.name}」 出目 ${roll}（${tgt}以上で成功）`, rang ? "財宝の場所が探偵に知られました" : `この財宝の失敗 ${tr.fails}回（${g.opt.alarmFails}回で警報）`], "bad", { dice: roll });
         alog(g, p.id, "解除", { dice: roll, detail: `${tr.name}（${tgt}以上で成功）`, to: nm(th.k), result: tr.alarm && th.alarmTrig ? "失敗・警報" : "失敗" });
       }
     } else if (tp.act === "release") {

@@ -8,7 +8,7 @@ const BASE = process.env.BASE || "http://127.0.0.1:8765/";
   page.on("pageerror", e => errs.push("pageerror: " + e.message));
   page.on("console", m => { if (m.type() === "error") errs.push("console: " + m.text()); });
   page.on("dialog", d => d.accept());
-  await page.goto(BASE);
+  await page.goto(BASE + "?fx=0"); // サイコロの演出なしで回す
   await page.screenshot({ path: "test/shot_title.png", fullPage: true });
   await page.selectOption("#lnum", "4");
   await page.click("#blocal");

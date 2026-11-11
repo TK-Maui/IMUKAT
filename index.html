@@ -98,6 +98,26 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 .stat div{background:var(--bg);border-radius:8px;padding:6px 8px;font-size:13px}
 .big{font-size:22px;font-weight:800;letter-spacing:2px}
 .ok{color:var(--ok)} .ng{color:var(--warn)}
+/* サイコロの演出 */
+#dicebox{position:fixed;inset:0;z-index:70;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:rgba(10,12,22,.86);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);color:#fff;text-align:center;padding:16px;cursor:pointer}
+#dicebox .dlabel{font-weight:800;font-size:18px;text-shadow:0 1px 4px rgba(0,0,0,.6)}
+#dicebox .dstage{width:150px;height:150px;perspective:560px;display:flex;align-items:center;justify-content:center}
+#dicebox .dbounce{animation:dbounce 1.05s cubic-bezier(.3,.6,.4,1) both}
+#dicebox .dcube{width:88px;height:88px;position:relative;transform-style:preserve-3d}
+#dicebox .dcube.spin{transition:transform 1.05s cubic-bezier(.15,.75,.25,1)}
+.dface{position:absolute;inset:0;background:#fbfaf6;border-radius:14px;border:1px solid #cfc9bb;box-shadow:inset 0 0 14px rgba(0,0,0,.12);display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);padding:11px;gap:2px;backface-visibility:hidden}
+.dface i{border-radius:50%;margin:3px}.dface i.on{background:#1b2430;box-shadow:inset 0 -2px 3px rgba(255,255,255,.25)}
+.dface.f1 i.on{background:#d1495b}
+.dface.f1{transform:translateZ(44px)}.dface.f6{transform:rotateY(180deg) translateZ(44px)}
+.dface.f2{transform:rotateY(90deg) translateZ(44px)}.dface.f5{transform:rotateY(-90deg) translateZ(44px)}
+.dface.f3{transform:rotateX(90deg) translateZ(44px)}.dface.f4{transform:rotateX(-90deg) translateZ(44px)}
+#dicebox .dres{min-height:54px;opacity:0;transform:scale(.8);transition:opacity .18s,transform .18s}
+#dicebox .dres.show{opacity:1;transform:none}
+#dicebox .dres b{display:block;font-size:30px;line-height:1.1}
+#dicebox .dres span{font-size:14px;opacity:.9}
+#dicebox .dskip{font-size:12px;opacity:.7}
+@keyframes dbounce{0%{transform:translateY(-120px) scale(.9)}38%{transform:translateY(0)}55%{transform:translateY(-34px)}72%{transform:translateY(0)}84%{transform:translateY(-10px)}100%{transform:translateY(0)}}
+@media (prefers-reduced-motion: reduce){#dicebox .dbounce{animation:none}#dicebox .dcube.spin{transition:none}}
 /* 結果のポップアップ */
 #notebox{position:fixed;inset:0;z-index:60;display:flex;align-items:flex-start;justify-content:center;padding:70px 16px 16px;background:rgba(0,0,0,.35)}
 #notebox .nwrap{width:min(440px,100%);display:flex;flex-direction:column;gap:8px;max-height:calc(100vh - 90px);overflow:auto}
@@ -526,6 +546,48 @@ function renderTitle(){
   $("#brules_full").onclick=()=>openRules("full");
 }
 
+/* ---------- サイコロの演出 ---------- */
+const FX_DICE=_qs.get("fx")!=="0";
+const PIPS={1:[4],2:[0,8],3:[0,4,8],4:[0,2,6,8],5:[0,2,4,6,8],6:[0,2,3,5,6,8]};
+const DICE_ROT={1:[0,0],2:[0,-90],3:[-90,0],4:[90,0],5:[0,90],6:[0,180]};
+const DICE={busy:false,queue:[]};
+function diceFace(n){return `<div class="dface f${n}">${Array.from({length:9},(_,i)=>`<i class="${PIPS[n].includes(i)?"on":""}"></i>`).join("")}</div>`}
+// value：出目（1〜6）。label：何のサイコロか。sub：止まったあとに出す一言。done：終わったあとに呼ぶ
+function playDice(value,label,sub,done){
+  if(!FX_DICE||!(value>=1&&value<=6)){if(done)done();return}
+  if(DICE.busy){DICE.queue.push([value,label,sub,done]);return}
+  DICE.busy=true;
+  const still=window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const box=document.createElement("div");box.id="dicebox";box.setAttribute("role","status");
+  box.innerHTML=`<div class="dlabel">🎲 ${esc(label||"サイコロ")}</div><div class="dstage"><div class="dbounce"><div class="dcube">${[1,2,3,4,5,6].map(diceFace).join("")}</div></div></div><div class="dres"><b>出目 ${value}</b><span>${esc(sub||"")}</span></div><div class="dskip">タップで飛ばす</div>`;
+  document.body.appendChild(box);
+  const cube=box.querySelector(".dcube"),res=box.querySelector(".dres");const [rx,ry]=DICE_ROT[value];
+  let over=false,t1=null,t2=null;
+  const finish=()=>{if(over)return;over=true;clearTimeout(t1);clearTimeout(t2);box.remove();DICE.busy=false;try{if(done)done()}catch(e){console.error(e)}
+    const nx=DICE.queue.shift();if(nx)playDice(...nx);else{try{showNotes()}catch(e){console.error(e)}}};
+  const land=()=>{res.classList.add("show");t2=setTimeout(finish,still?900:750)};
+  if(still){cube.style.transform=`rotateX(${rx}deg) rotateY(${ry}deg)`;land()}
+  else{
+    cube.style.transform=`rotateX(${Math.floor(Math.random()*360)}deg) rotateY(${Math.floor(Math.random()*360)}deg) rotateZ(${Math.floor(Math.random()*90)}deg)`;
+    void cube.offsetWidth;cube.classList.add("spin");
+    cube.style.transform=`rotateX(${rx+720}deg) rotateY(${ry+1080}deg) rotateZ(360deg)`;
+    t1=setTimeout(land,1080);
+  }
+  box.onclick=finish;
+}
+// 移動のサイコロ：出目が「まだ」から「出た」に変わったときだけ転がす（開き直しや席の切り替えでは転がさない）
+function checkMoveDice(v){
+  if(!v||v.phase!=="play")return;
+  let key=null,die=null,label="",sub="";
+  if(v.role==="thief"&&v.stage==="thief"&&v.my&&v.my.tp&&!v.my.tp.captured){const tp=v.my.tp;key=`${v.gid}|${v.round}|${v.turn}|${v.me}|t`;die=tp.die==null?null:tp.die;label="移動のサイコロ";
+    if(die!=null)sub=tp.roll!==die?`俊足シューズ +${tp.roll-die} → ${tp.roll}マスまで動けます`:`${die}マスまで動けます`}
+  else if(v.role==="det"&&v.stage==="det"&&v.det&&v.det.tp){const tp=v.det.tp;key=`${v.gid}|${v.round}|${v.turn}|${v.me}|d${v.step}`;die=tp.die==null?null:tp.die;label=`${v.step}回目のサイコロ`;
+    if(die!=null)sub=tp.roll!==die?`全力疾走 +${tp.roll-die} → ${tp.roll}マスまで動けます`:`${die}マスまで動けます`}
+  if(key==null)return;
+  S._die=S._die||{};const prev=S._die[key];S._die[key]=die;
+  if(die!=null&&prev===null)playDice(die,label,sub);
+}
+
 /* ---------- 結果のポップアップ ---------- */
 function seenKey(){return `imukat_seen_${S.code||""}_${V()&&V().gid||""}_${V()&&V().me||""}`}
 function seenSet(){const k=seenKey();S._seen=S._seen||{};if(!S._seen[k]){let a=[];try{a=JSON.parse(localStorage.getItem(k)||"[]")}catch(e){}S._seen[k]=new Set(a)}return S._seen[k]}
@@ -535,6 +597,10 @@ function showNotes(){
   if(!v||!v.notes||!(v.phase==="play"||v.phase==="roundEnd")){if(box)box.remove();return}
   const st=seenSet();const fresh=v.notes.filter(n=>!st.has(n.id));
   if(!fresh.length){if(box)box.remove();return}
+  // サイコロを振った結果（解除・抜け出し）は、先にサイコロを転がしてから見せる
+  S._diced=S._diced||new Set();const dn=FX_DICE?fresh.find(n=>n.dice&&!S._diced.has(n.id)):null;
+  if(dn){if(box)box.remove();S._diced.add(dn.id);playDice(dn.dice,dn.icon==="🎲"?"抜け出しに挑戦":"セキュリティ解除","",()=>{try{showNotes()}catch(e){console.error(e)}});return}
+  if(DICE.busy)return;
   if(!box){box=document.createElement("div");box.id="notebox";document.body.appendChild(box)}
   const allIds=fresh.map(n=>n.id);
   const show=fresh.slice(-6);const sig=show.map(n=>n.id).join(",");
@@ -564,6 +630,7 @@ function render(){
   $("#app").innerHTML=h;
   renderSide(v);
   bind();
+  try{checkMoveDice(v)}catch(e){console.error(e)}
   try{showNotes()}catch(e){console.error(e)}
 }
 function headerHTML(v){

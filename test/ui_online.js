@@ -1,6 +1,6 @@
 // 通信を含めた動作確認：同じブラウザ内のタブ同士（?transport=bc）で、部屋を作る→参加→数ターン→取り消し→再接続
 const { chromium } = require("playwright");
-const BASE = (process.env.BASE || "http://127.0.0.1:8765/") + "?transport=bc";
+const BASE = (process.env.BASE || "http://127.0.0.1:8765/") + "?transport=bc&fx=0";
 (async () => {
   const browser = await chromium.launch();
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
