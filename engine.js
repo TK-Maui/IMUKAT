@@ -5,7 +5,7 @@
 (function (root) {
 "use strict";
 const E = {};
-E.VERSION = "テスト版 v1.19";
+E.VERSION = "テスト版 v1.20";
 
 /* ---------- 乱数（ゲームごとの種から作る。同じ種＋同じ操作なら同じ結果） ---------- */
 let RNG = null;
@@ -197,7 +197,7 @@ function startRound(g) {
   g.players.forEach(p => { delete p.th; delete p.det; p.rd = { start: p.money - p.debt, earn: {} }; });
   g.turn = 0; g.stage = null; g.step = 0;
   g.prints = []; g.heli = {}; g.backOpen = false; g.blocks = []; g.oils = []; g.devices = []; g.reveals = []; g.searchMarks = [];
-  g.blackoutNext = false; g.bugNext = false; g.floorHint = null;
+  g.blackoutNext = false; g.bugNext = false; g.floorHint = null; g.itemUses = [];
   placeRandom(g);
   const b = bld(g);
   const notices = shuffle(Object.keys(NOTICES));
@@ -358,6 +358,8 @@ function thiefAct(g, p, a) {
     else if (it === "oil") { if (a.k == null || a.k < 0 || a.k > 127) return "オイルを仕掛けるマスを選んでください"; g.oils.push({ k: a.k, by: p.id }); }
     else if (it === "bug") g.bugNext = true;
     th.items.splice(i, 1); th.stats.items++;
+    // 探偵に影響するアイテムは、怪盗のターンの終わりに怪盗全員へまとめて知らせる
+    if (["decoy", "oil", "blackout", "fake"].includes(it)) (g.itemUses = g.itemUses || []).push({ pid: p.id, it, k: a.k != null ? a.k : null });
     log(g, "th", `${p.name}が「${ITEMS[it].name}」を使いました${a.k != null ? `（${nm(a.k)}）` : ""}`);
     alog(g, p.id, "アイテム", { detail: ITEMS[it].name, to: a.k != null ? nm(a.k) : "" });
     return null;
@@ -544,9 +546,24 @@ function resolveThieves(g) {
   for (const p of ts) {
     const id = p.th.tp.use && p.th.tp.use.decoy; if (!id) continue;
     const tr = g.tr.find(t => t.id === id); if (!tr) continue;
-    if (!tr.taken && !tr.alarm && !tr.decoy) { tr.decoy = true; ringAlarm(g, tr); log(g, "th", `（${p.name}の陽動です。本物の警報ではありません）`); }
-    note(g, p.id, "🎭", "陽動成功", [`${nm(tr.k)} の「${tr.name}」で警報が鳴ったように見せました`, "探偵がそのマスを調べると、失敗回数で見抜かれます"], "good");
+    const u = (g.itemUses || []).find(x => x.pid === p.id && x.it === "decoy");
+    if (!tr.taken && !tr.alarm && !tr.decoy) { tr.decoy = true; ringAlarm(g, tr); log(g, "th", `（${p.name}の陽動です。本物の警報ではありません）`); if (u) u.ok = true; }
+    else if (u) u.ok = false;
     alog(g, p.id, "陽動", { detail: tr.name, to: nm(tr.k) });
+  }
+  // 探偵に影響するアイテムを使ったことを、怪盗全員にまとめて知らせる
+  const uses = g.itemUses || []; g.itemUses = [];
+  if (uses.length) {
+    const lines = uses.map(u => {
+      const who = P(g, u.pid).name, nmK = u.k != null ? nm(u.k) : "";
+      if (u.it === "decoy") { const tr = g.tr.find(t => t.k === u.k); const tn = tr ? `「${tr.name}」` : "財宝";
+        return u.ok === false ? `🎭 ${who}：陽動（${nmK}${tn}は盗まれたか警報が鳴っていたので、不発）` : `🎭 ${who}：陽動（${nmK}${tn}で警報が鳴ったように見せた。探偵が調べると見抜かれる）`; }
+      if (u.it === "oil") return `🛢 ${who}：オイル（${nmK}に仕掛けた。探偵が止まると、残りの行動ができなくなる）`;
+      if (u.it === "blackout") return `🔌 ${who}：停電スイッチ（この探偵のターン、探偵はスキルを使えない）`;
+      if (u.it === "fake") return `👣 ${who}：偽の足跡（${nmK}に置いた。${who}の本当の足跡はこのターン残らない）`;
+      return `${who}：${ITEMS[u.it].name}`;
+    });
+    thieves(g).filter(q => q.th.status !== "escaped").forEach(q => note(g, q.id, "🃏", "このターン使われたアイテム", lines, "info"));
   }
   // 警報器
   for (const p of ts) {

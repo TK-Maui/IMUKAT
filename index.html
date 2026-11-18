@@ -60,6 +60,9 @@ td.n,th.n{text-align:right}
 @media (prefers-reduced-motion: reduce){.cell .tr.alarm{animation:none}}
 .cell .pt{position:absolute;right:2px;top:1px;font-size:10px;font-weight:800;color:var(--part)}
 .cell .tr.gone{opacity:.35;border-style:dashed}
+.cell .tr.mini{inset:auto;left:3%;top:3%;width:44%;height:44%;font-size:9px;border-width:2px;z-index:3;box-shadow:0 0 0 1px var(--cell)}
+.cell .seen.mini{left:auto;right:2px;top:2px;z-index:3;background:var(--cell);border-radius:3px;padding:0 1px}
+.cell .dt.two{inset:auto;width:46%;height:46%;font-size:13px}
 .cell .pt.gone{opacity:.35;text-decoration:line-through}
 .cell .seen{position:absolute;left:2px;top:12px;font-size:9px;font-weight:700;color:var(--ok)}
 .cell .fp{position:absolute;bottom:3px;left:3px;display:flex;gap:1px;flex-wrap:wrap;max-width:70%}
@@ -693,15 +696,23 @@ function mapHTML(v,o){
       const cls=["cell"];if(q)cls.push("q1");if(fixed[k])cls.push("fx");if(tap.has&&tap.has(k))cls.push("reach","tap");if(sel.has(k))cls.push("sel");if(o.anyTap)cls.push("tap");
       let in_="";
       if(fixed[k])in_+=`<span class="fxl">${fixed[k]}</span>`;
-      const tr=v.tr.find(t=>t.k===k&&!t.taken);if(tr){const gone=tr.seen&&tr.seen.taken;in_+=`<span class="tr ${tr.alarm&&!gone?"alarm":""} ${gone?"gone":""}" title="${esc(tr.name)}">${gone?"✕":E.TR[tr.rank].label[0]}</span>`;if(tr.seen&&!gone)in_+=`<span class="seen">${tr.seen.stage}/${tr.seen.need}</span>`}
+      const capd=v.players.filter(p=>p.capK===k);
+      const here=v.thieves?v.thieves.filter(t=>t.k===k&&(t.status==="active"||t.status==="captured")):[];
+      const detHere=!!(v.det&&v.det.k===k);
+      const tr=v.tr.find(t=>t.k===k&&!t.taken);
+      // 財宝のマスに人がいるときは、財宝の印を左上に小さく出し、人の駒は右下に寄せる（重なって見えなくならないように）
+      const mini=!!tr&&(here.length>0||detHere||(!v.thieves&&capd.length>0));
+      if(tr){const gone=tr.seen&&tr.seen.taken;in_+=`<span class="tr ${mini?"mini":""} ${tr.alarm&&!gone?"alarm":""} ${gone?"gone":""}" title="${esc(tr.name)}">${gone?"✕":E.TR[tr.rank].label[0]}</span>`;if(tr.seen&&!gone)in_+=`<span class="seen ${mini?"mini":""}">${tr.seen.stage}/${tr.seen.need}</span>`}
       const pt=v.parts.find(x=>x.k===k&&!x.taken);if(pt){const gone=pt.seen&&pt.seen.taken;in_+=`<span class="pt ${gone?"gone":""}">${{uniform:"服",mask:"面",badge:"証",baton:"棒"}[pt.type]}</span>`}
       const fps=(v.prints||[]).filter(x=>x.k===k);if(fps.length)in_+=`<span class="fp">${fps.map(x=>`<i class="${x.age?"old":""} ${x.fake?"fake":""}" style="--pc:${pcol(x.pid)}"></i>`).join("")}</span>`;
-      const capd=v.players.filter(p=>p.capK===k);
-      if(v.thieves){const here=v.thieves.filter(t=>t.k===k&&(t.status==="active"||t.status==="captured"));
-        here.forEach((t,i)=>{in_+=`<span class="tk ${here.length>1?"two":""} ${t.status==="captured"?"cap":""}" style="--pc:${pcol(t.id)};${here.length>1?`left:${i%2?50:4}%;top:${i>1?50:4}%`:""}">${esc(pname(t.id).slice(0,1))}</span>`});
+      // 駒の置き場所：財宝があるときは左上を空ける
+      const SLOT=mini?[[50,50],[50,4],[4,50],[27,27]]:[[4,4],[50,4],[4,50],[50,50]];
+      const many=here.length+(detHere?1:0);
+      if(v.thieves){
+        here.forEach((t,i)=>{const multi=many>1||mini;const [l,tp]=SLOT[Math.min(i,3)];in_+=`<span class="tk ${multi?"two":""} ${t.status==="captured"?"cap":""}" style="--pc:${pcol(t.id)};${multi?`left:${l}%;top:${tp}%`:""}">${esc(pname(t.id).slice(0,1))}</span>`});
         v.thieves.filter(t=>t.tp&&t.tp.dest===k&&t.k!==k&&t.status==="active").forEach(t=>in_+=`<span class="plan" style="--pc:${pcol(t.id)}"></span>`);
-      }else capd.forEach(p=>in_+=`<span class="tk cap" style="--pc:${pcol(p.id)}">⛓</span>`);
-      if(v.det&&v.det.k===k)in_+=`<span class="dt">🕵</span>`;
+      }else capd.forEach((p,i)=>{const multi=capd.length>1||mini||detHere;const [l,tp]=SLOT[Math.min(i,3)];in_+=`<span class="tk cap ${multi?"two":""}" style="--pc:${pcol(p.id)};${multi?`left:${l}%;top:${tp}%`:""}">⛓</span>`});
+      if(detHere){const n=v.thieves?here.length:capd.length;const multi=n>0||mini;const [l,tp]=SLOT[Math.min(n,3)];in_+=`<span class="dt ${multi?"two":""}" style="${multi?`left:${l}%;top:${tp}%`:""}">🕵</span>`}
       if(v.det&&v.det.tp&&v.det.tp.dest===k&&v.det.k!==k)in_+=`<span class="plan" style="--pc:#333"></span>`;
       if(v.det&&(v.det.devices||[]).includes(k))in_+=`<span class="mk">🔔</span>`;
       if((v.oils||[]).some(x=>x.k===k))in_+=`<span class="mk">💧</span>`;
