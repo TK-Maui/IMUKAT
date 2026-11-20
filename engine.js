@@ -5,7 +5,7 @@
 (function (root) {
 "use strict";
 const E = {};
-E.VERSION = "テスト版 v1.20";
+E.VERSION = "テスト版 v1.21";
 
 /* ---------- 乱数（ゲームごとの種から作る。同じ種＋同じ操作なら同じ結果） ---------- */
 let RNG = null;
@@ -196,6 +196,7 @@ function startRound(g) {
   g.detId = g.order[(g.round - 1) % n];
   g.players.forEach(p => { delete p.th; delete p.det; p.rd = { start: p.money - p.debt, earn: {} }; });
   g.turn = 0; g.stage = null; g.step = 0;
+  g.rT = { setup: Date.now(), play: null, stage: null, at: null, thiefMs: 0, detMs: 0 };
   g.prints = []; g.heli = {}; g.backOpen = false; g.blocks = []; g.oils = []; g.devices = []; g.reveals = []; g.searchMarks = [];
   g.blackoutNext = false; g.bugNext = false; g.floorHint = null; g.itemUses = [];
   placeRandom(g);
@@ -226,7 +227,7 @@ E.startGame = startGame;
 
 /* ---------- ターンの始まり ---------- */
 function startThiefTurn(g) {
-  g.stage = "thief"; g.step = 0;
+  g.stage = "thief"; g.step = 0; stampTime(g, "thief");
   g.blocks = (g.blocks || []).filter(b => b.until >= g.turn);
   // 前のターンに始めた「受け取り」「解放」の完了
   for (const p of thieves(g)) {
@@ -267,7 +268,7 @@ function startThiefTurn(g) {
   checkThiefDone(g);
 }
 function startDetTurn(g) {
-  g.stage = "det"; g.step = 1;
+  g.stage = "det"; g.step = 1; stampTime(g, "det");
   const d = det(g).det;
   for (const s of Object.keys(d.cd)) d.cd[s] = Math.max(0, d.cd[s] - 1);
   d.blackout = g.blackoutNext; g.blackoutNext = false;
@@ -795,7 +796,22 @@ function noticeOK(g, p) {
   return false;
 }
 E.noticeOK = noticeOK;
+/* ---------- 所要時間：準備・怪盗のターン・探偵のターンに分けて測る ---------- */
+function stampTime(g, stage) {
+  const t = g.rT; if (!t) return; const now = Date.now();
+  if (t.stage && t.at) { const ms = Math.max(0, now - t.at); if (t.stage === "thief") t.thiefMs += ms; else if (t.stage === "det") t.detMs += ms; }
+  if (stage === "thief" && t.play == null) t.play = now;
+  t.stage = stage; t.at = now;
+}
+function roundTime(g) {
+  const t = g.rT; if (!t || t.play == null) return null;
+  const min = ms => Math.round(ms / 6000) / 10, turns = Math.max(1, g.turn);
+  return { setupMin: min(t.play - t.setup), playMin: min(t.thiefMs + t.detMs), thiefMin: min(t.thiefMs), detMin: min(t.detMs), turns, thiefSecPerTurn: Math.round(t.thiefMs / turns / 1000), detSecPerTurn: Math.round(t.detMs / turns / 1000) };
+}
+E.roundTime = roundTime;
 function endRound(g, why) {
+  stampTime(g, null);
+  const rt = roundTime(g) || {};
   const ts = thieves(g); const dp = det(g); const d = dp.det;
   ts.forEach(p => { if (p.th.status === "active") { p.th.status = "failed"; log(g, "all", `${p.name}は脱出できませんでした（脱出失敗）`); } });
   const pot = ts.filter(p => p.th.status === "escaped").reduce((s, p) => s + p.th.loot.reduce((a, id) => a + g.tr.find(t => t.id === id).value, 0), 0);
@@ -819,7 +835,7 @@ function endRound(g, why) {
   g.players.forEach(p => {
     const th = p.th; const e = p.rd.earn; const st = th ? th.stats : null;
     g.records.push({
-      gid: g.gid, round: g.round, name: p.name, role: p.det ? "探偵" : "怪盗", endReason: why, endTurn: g.turn,
+      gid: g.gid, round: g.round, playMin: rt.playMin ?? "", setupMin: rt.setupMin ?? "", thiefMin: rt.thiefMin ?? "", detMin: rt.detMin ?? "", thiefSecPerTurn: rt.thiefSecPerTurn ?? "", detSecPerTurn: rt.detSecPerTurn ?? "", name: p.name, role: p.det ? "探偵" : "怪盗", endReason: why, endTurn: g.turn,
       status: th ? { escaped: "脱出成功", captured: "捕縛", failed: "脱出失敗" }[th.status] : "",
       escHow: th && th.escHow ? { heli: "ヘリ", disguise: "変装", wire: "ワイヤー銃" }[th.escHow] : "", escTurn: th ? th.escTurn || "" : "",
       loot: th ? th.loot.map(id => g.tr.find(t => t.id === id).name).join("・") : "",
@@ -937,7 +953,7 @@ function toCSV(cols, rows) { return "﻿" + [cols.map(c => q(c[1])).join(","), .
 E.ACT_COLS = [["at", "時刻"], ["round", "ラウンド"], ["turn", "ターン"], ["stage", "場面"], ["name", "プレイヤー"], ["role", "役"], ["kind", "操作"], ["from", "移動元"], ["to", "移動先・対象"], ["dice", "出目"], ["detail", "内容"], ["result", "結果"]];
 E.REC_COLS = [["round", "ラウンド"], ["name", "名前"], ["role", "役"], ["status", "結果"], ["escHow", "脱出方法"], ["escTurn", "脱出ターン"], ["loot", "持ち出した財宝"], ["lootValue", "財宝の額"],
   ["notice", "予告状"], ["declared", "予告"], ["noticeOK", "予告達成"], ["share", "山分け"], ["noticeBonus", "予告状ボーナス"], ["flair", "華麗さ"], ["rescue", "救出"], ["bail", "保釈金"],
-  ["endCapReward", "捕縛の報奨金"], ["capReward", "累計捕縛"], ["failReward", "脱出失敗の報酬"], ["blockReward", "予告阻止"], ["delta", "このラウンドの増減"], ["money", "所持金"], ["debt", "借金"], ["net", "差し引き"],
+  ["endCapReward", "捕縛の報奨金"], ["capReward", "累計捕縛"], ["failReward", "脱出失敗の報酬"], ["blockReward", "予告阻止"], ["delta", "このラウンドの増減"], ["money", "所持金"], ["debt", "借金"], ["net", "差し引き"], ["playMin", "プレイ時間(分)"], ["setupMin", "準備の時間(分)"], ["thiefMin", "怪盗のターン合計(分)"], ["detMin", "探偵のターン合計(分)"], ["thiefSecPerTurn", "怪盗の1ターン平均(秒)"], ["detSecPerTurn", "探偵の1ターン平均(秒)"],
   ["captures", "捕縛した人数"], ["capN", "捕縛回数"], ["capPaid", "報酬の対象になった捕縛回数"], ["moves", "移動回数"], ["stays", "留まった回数"], ["unlockTry", "解除の挑戦"], ["unlockOk", "解除の成功"], ["fails", "解除の失敗"],
   ["rescues", "解放した回数"], ["items", "使ったアイテム"], ["timeouts", "時間切れ"], ["heliTurn", "ヘリを呼んだターン"], ["alarms", "鳴った警報"], ["treasuresTaken", "盗まれた財宝"], ["pot", "持ち出し合計"], ["skills", "探偵のスキル"], ["endReason", "終了理由"], ["endTurn", "終了ターン"]];
 E.csvActions = g => toCSV(E.ACT_COLS, g.alog.map(r => Object.assign({}, r, { at: new Date(r.at).toLocaleString("ja-JP") })));

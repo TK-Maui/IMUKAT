@@ -139,6 +139,7 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 .partchip.on{border:1px solid var(--part);background:color-mix(in srgb,var(--part) 16%,var(--panel));color:var(--ink);font-weight:700}
 .partchip.on:before{content:"✓ "}
 .partchip.dup:after{content:attr(data-n)}
+.timebox{margin:8px 0;padding:8px 10px;border-radius:8px;background:var(--gold-bg);border:1px solid var(--gold)}
 </style>
 </head>
 <body>
@@ -857,7 +858,9 @@ function recTable(recs){
 }
 function renderRoundEnd(v){
   const recs=v.records.filter(r=>r.round===v.round&&r.gid===v.gid);
-  let h=`<div class="panel me"><b>第${v.round}ラウンド終了</b><div class="sub">${esc(v.roundEndWhy||"")}</div>${recTable(recs)}
+  const r0=recs[0]||{};
+  const tm=r0.playMin!==""&&r0.playMin!=null?`<div class="timebox">⏱ このラウンドの時間：<b>${r0.playMin}分</b>（${r0.thiefSecPerTurn!==""?`1ターンあたり 怪盗 ${r0.thiefSecPerTurn}秒・探偵 ${r0.detSecPerTurn}秒`:""}）<div class="sub">準備（スタート地点・予告・スキル選び）${r0.setupMin}分は含みません。怪盗のターン合計 ${r0.thiefMin}分・探偵のターン合計 ${r0.detMin}分</div></div>`:"";
+  let h=`<div class="panel me"><b>第${v.round}ラウンド終了</b><div class="sub">${esc(v.roundEndWhy||"")}</div>${tm}${recTable(recs)}
   ${isHost()?`<div class="row" style="margin-top:8px"><button class="primary" id="bnext">${v.round>=v.rounds?"結果を見る":"次のラウンドへ"}</button></div>`:`<div class="sub" style="margin-top:6px">部屋を作った人が次へ進めます。</div>`}</div>`;
   h+=`<div class="sub">ラウンドが終わったので、全員の位置を表示しています。</div>`+mapHTML(v,{});
   return h;
@@ -865,6 +868,7 @@ function renderRoundEnd(v){
 function renderEnd(v){
   const rank=v.players.map(p=>({id:p.id,net:p.money-p.debt,det:p.totalDet})).sort((a,b)=>b.net-a.net||b.det-a.det);
   return `<div class="panel me"><h2 style="margin-top:0">🏆 ゲーム終了</h2><table><tr><th>順位</th><th>名前</th><th class="n">所持金（借金を差し引き）</th><th class="n">探偵ラウンドの稼ぎ</th></tr>${rank.map((r,i)=>`<tr><td>${i+1}</td><td>${chip(r.id)}</td><td class="n">${yen(r.net)}</td><td class="n">${yen(r.det)}</td></tr>`).join("")}</table>
+  ${(()=>{const rs=[...new Map(v.records.filter(r=>r.gid===v.gid&&r.playMin!==""&&r.playMin!=null).map(r=>[r.round,r])).values()];if(!rs.length)return"";const tot=Math.round(rs.reduce((a,r)=>a+r.playMin+(r.setupMin||0),0));return `<div class="timebox">⏱ ゲーム全体：約<b>${tot}分</b>（準備を含む）<div class="sub">${rs.map(r=>`第${r.round}ラウンド ${r.playMin}分`).join("・")}</div></div>`})()}
   <div class="sub">同点なら探偵ラウンドの稼ぎが多い人の勝ち。記録は右の📋から保存できます。</div>
   <div class="row" style="margin-top:8px"><button onclick="location.href=location.pathname">タイトルに戻る</button></div></div>`+`<div class="panel"><b>全ラウンドの記録</b>${recTable(v.records.filter(r=>r.gid===v.gid))}</div>`;
 }
