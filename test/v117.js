@@ -2,7 +2,7 @@
 const E = require("../engine.js");
 let ok = 0, ng = 0; const check = (c, m) => { if (c) ok++; else { ng++; console.log("NG:", m); } };
 function setup(n, seed) {
-  const g = E.newGame(); g.seed = seed;
+  const g = E.newGame(); g.seed = seed; g.opt.skillMode = "free"; g.opt.release = false;
   for (let i = 0; i < n; i++) g.players.push(E.newPlayer("P" + (i + 1), "名前" + (i + 1)));
   g.opt.thiefTimer = false;
   E.safeApply(g, "P1", { kind: "start" });

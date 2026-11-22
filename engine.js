@@ -5,7 +5,7 @@
 (function (root) {
 "use strict";
 const E = {};
-E.VERSION = "テスト版 v1.21";
+E.VERSION = "テスト版 v1.22";
 
 /* ---------- 乱数（ゲームごとの種から作る。同じ種＋同じ操作なら同じ結果） ---------- */
 let RNG = null;
@@ -36,7 +36,7 @@ E.nm = nm; E.parse = parse; E.areaOf = areaOf; E.FL = FL; E.RW = RW; E.CL = CL; 
 /* ---------- データ ---------- */
 const BUILDINGS = {
   museum: {
-    name: "美術館", front: "D-13", back: "A-2", stairs: [["B-9", "F-9"], ["C-8", "G-8"]],
+    name: "美術館", fronts: ["D-13", "D-14"], back: "A-2", stairs: [["B-9", "F-9"], ["C-8", "G-8"]],
     roof: ["E-1", "H-16"], windows: ["F-4", "G-13"], starts: ["A-2", "D-13", "F-4", "G-13"],
     tnames: { high: ["夜明けの涙"], mid: ["月下の貴婦人", "時を止めた懐中時計", "眠れる獅子の像"], low: ["銀の燭台", "黄金の羽ペン"] },
   },
@@ -46,12 +46,12 @@ function bld(g) {
   const id = g.building || "museum";
   if (!_bk[id]) {
     const b = BUILDINGS[id];
-    _bk[id] = { name: b.name, front: parse(b.front), back: parse(b.back), stairs: b.stairs.map(p => p.map(parse)),
+    _bk[id] = { name: b.name, fronts: b.fronts.map(parse), front: parse(b.fronts[0]), back: parse(b.back), stairs: b.stairs.map(p => p.map(parse)),
       roof: b.roof.map(parse), windows: b.windows.map(parse), starts: b.starts.map(parse), tnames: b.tnames };
   }
   return _bk[id];
 }
-function fixedList(g) { const b = bld(g); return [b.front, b.back, ...b.stairs.flat(), ...b.roof, ...b.windows]; }
+function fixedList(g) { const b = bld(g); return [...b.fronts, b.back, ...b.stairs.flat(), ...b.roof, ...b.windows]; }
 E.bld = bld; E.BUILDINGS = BUILDINGS;
 
 const TR = {
@@ -68,19 +68,24 @@ const NOTICES = {
   noalarm: { name: "無音の怪盗", text: "自分の解除で一度も警報を鳴らさずに脱出する" },
   upheli: { name: "天空の逃避行", text: "2階の財宝を持ってヘリで脱出する" },
 };
+// shop：お金で買う（自分に効く）／それ以外：ラウンドの始めにランダムで配る（相手に効く・強力）
 const ITEMS = {
-  shoes: { name: "俊足シューズ", text: "このターン、サイコロの出目に+2する（サイコロを振る前に使う）" },
-  key: { name: "万能鍵", text: "このターンのセキュリティ解除は、当たり目が1つ広がる（例：5〜6→4〜6）" },
+  shoes: { name: "俊足シューズ", shop: 100, text: "このターン、サイコロの出目に+2する（サイコロを振る前に使う）" },
+  key: { name: "万能鍵", shop: 200, text: "このターンのセキュリティ解除は、当たり目が1つ広がる（例：4〜6→3〜6）" },
+  kit: { name: "解除キット", shop: 100, text: "このターンのセキュリティ解除に失敗しても、失敗回数に数えない（警報が鳴らない）" },
+  spare: { name: "予備の変装パーツ", shop: 200, text: "使うと、好きな変装パーツを1つ手に入れる", part: true },
+  scope: { name: "双眼鏡", shop: 200, text: "使うと、探偵が今いるエリア（A〜H）が分かる（怪盗全員に知らされる）" },
+  fake: { name: "偽の足跡", shop: 100, text: "好きなマスを選んで、自分の色の足跡を1つ置く。このターンは本当の足跡を残さない", target: true },
   bond: { name: "仲間の絆", text: "捕まった仲間のマスを移動先に選んでから使う。そのマスの仲間1人を、その場ですぐ解放する（行動を使わない。証拠押収されていても解放できる）。解放された仲間は、このターンから動ける" },
   rope: { name: "縄抜け", text: "捕縛されているときに使うと、自力で抜け出せる（そのターンから動ける）" },
   decoy: { name: "陽動", text: "財宝のマスを1つ選ぶ。このターンの終わりに、その財宝で警報が鳴ったように全員に表示される（探偵には本物と区別できない。探偵がそのマスを調べれば失敗回数で見抜ける）", target: true },
-  fake: { name: "偽の足跡", text: "好きなマスを選んで、自分の色の足跡を1つ置く。このターンは本当の足跡を残さない", target: true },
   blackout: { name: "停電スイッチ", text: "次の探偵のターン、探偵はスキルを使えない" },
   oil: { name: "オイル", text: "好きなマスに仕掛ける（探偵には見えない）。探偵がそこに止まると、そのターンの残りの行動ができなくなる。探偵がいるマスにも置け、探偵がその場に留まるか、あとで止まると滑る（置いただけでは探偵は転ばないので、そのマスに入ると鉢合わせで捕まる）", target: true },
   bug: { name: "盗聴器", text: "次の探偵のターンが終わったとき、探偵がいるフロアが怪盗全員に分かる" },
   wire: { name: "ワイヤー銃", text: "2階の窓のマスに止まったとき、そこから脱出できる（山札に1枚だけ）" },
 };
-const ITEM_DECK = () => [..."shoes key bond rope decoy fake blackout oil bug".split(" ").flatMap(x => [x, x]), "wire"];
+const ITEM_DECK = () => [..."bond rope decoy blackout oil bug".split(" ").flatMap(x => [x, x]), "wire"]; // ランダムで配るアイテム
+const SHOP = Object.keys(ITEMS).filter(k => ITEMS[k].shop);
 const SKILLS = {
   ask: { name: "聞き込み", ct: 2, text: "エリアを1つ選ぶ。そのエリアにいる怪盗（捕縛中を除く）の人数が分かる", target: "area" },
   sense: { name: "気配察知", ct: 2, text: "今いるマスから2マス以内（同じフロアで縦横に数える）に怪盗がいるかどうかが分かる" },
@@ -93,21 +98,23 @@ const SKILLS = {
   secure: { name: "セキュリティ強化", ct: 0, text: "財宝のマスにいるとき、その財宝の解除段階を1つ増やす（1つの財宝につき1ラウンド1回）。使うと探偵の位置が全員に分かる" },
   alarmdev: { name: "警報器", ct: 3, text: "今いるマスに警報器を仕掛ける（怪盗には見えない）。怪盗がそのマスに止まると、探偵に知らされる（踏んだ怪盗にも分かる）" },
 };
-E.TR = TR; E.PARTS = PARTS; E.PART_KEYS = PART_KEYS; E.NOTICES = NOTICES; E.ITEMS = ITEMS; E.SKILLS = SKILLS;
+E.SHOP = SHOP; E.TR = TR; E.PARTS = PARTS; E.PART_KEYS = PART_KEYS; E.NOTICES = NOTICES; E.ITEMS = ITEMS; E.SKILLS = SKILLS;
 const PCOL = ["#2f6fd6", "#d1495b", "#2a9d6f", "#c98b12", "#8e5cc4", "#1e9aa8"];
 E.PCOL = PCOL;
-const MONEY = { bail: 100, endCap: 300, capture: 100, capMax: 2, failed: 100, block: 200, noticeOpen: 600, noticeHidden: 200, rescue: 200, flair: [300, 200, 100] };
+const MONEY = { bail: 100, endCap: 300, capture: 100, capMax: 2, failed: 100, block: 200, noticeOpen: 600, noticeHidden: 200, rescue: 200, flair: [300, 200, 100],
+  disguise: 300, breakout: 100, hinder: 200, gift: 100, release: 300 }; // disguise:変装脱出 breakout:自力で抜け出し hinder:妨害成功 gift:渡したアイテムが使われた release:保釈（お金で解放・探偵へ）
 E.MONEY = MONEY;
 
 function defaultOpt() {
   return { turns: 12, thiefTimer: true, thiefSec: 30, detTimer: false, detSec: 90, items: true, skills: true,
-    capture: "land", partsNeed: 3, alarmFails: 2, startMoneyPer: 100, itemN: null, trN: null, relTurns: 1, breakout: 6 }; // breakout：捕縛中の脱出サイコロ（この目以上で成功。0＝なし）
+    capture: "land", partsNeed: 3, alarmFails: 2, startMoneyPer: 100, itemN: null, trN: null, relTurns: 1, breakout: 6,
+    skillMode: "draft", detOrder: "poor", shop: true, release: true }; // skillMode：draft＝6つ配って4つ選ぶ／free＝全部から選ぶ／random＝4つランダム。detOrder：poor＝まだ探偵をしていない人の中で所持金が少ない人から／order＝参加した順 // breakout：捕縛中の脱出サイコロ（この目以上で成功。0＝なし）
 }
 const relBase = g => (g && g.opt && g.opt.relTurns) || 1; // 解放に必要な作業（ターン数）
 E.relBase = relBase;
 E.defaultOpt = defaultOpt;
 /* ---------- 人数による調整：怪盗が少ないほどアイテムと財宝を増やす（null＝人数に合わせて自動） ---------- */
-const SCALE = { 1: { items: 3, tr: 6 }, 2: { items: 3, tr: 6 }, 3: { items: 3, tr: 5 }, 4: { items: 2, tr: 4 }, 5: { items: 2, tr: 4 } };
+const SCALE = { 1: { items: 2, tr: 6 }, 2: { items: 2, tr: 6 }, 3: { items: 2, tr: 5 }, 4: { items: 1, tr: 4 }, 5: { items: 1, tr: 4 } };
 E.SCALE = SCALE;
 function scaleFor(g) {
   const nT = Math.max(1, g.players.length - 1); const s = SCALE[Math.min(5, nT)];
@@ -160,7 +167,7 @@ function startGame(g) {
   g.opt.turns = 12; // 1ラウンドは12ターン固定
   if (!g.opt.relTurns) g.opt.relTurns = 1;
   g.rounds = g.opt.rounds || g.players.length;
-  g.order = g.players.map(p => p.id);
+  g.order = g.players.map(p => p.id); g.detDone = [];
   g.players.forEach((p, i) => { p.color = i; p.money = g.players.length * g.opt.startMoneyPer; p.debt = 0; p.total = { det: 0 }; });
   g.rs = g.seed; g.round = 0;
   log(g, "all", `ゲーム開始（${g.players.length}人・${g.rounds}ラウンド・開始時の所持金 各${g.players.length * g.opt.startMoneyPer}万円）`);
@@ -190,10 +197,21 @@ function placeRandom(g) {
   const parts = "ABCDEFGH".split("").map((a, i) => ({ id: "p" + i, type: types[i], k: pickIn(a), taken: false }));
   g.tr = tr; g.parts = parts;
 }
+// 探偵役：全員1回は必ず探偵をする。順番は「まだ探偵をしていない人の中で、所持金（借金を差し引き）がいちばん少ない人」。
+// 1ラウンド目と同点はランダム。opt.detOrder==="order" なら参加した順。
+function pickDet(g) {
+  const n = g.order.length; g.detDone = g.detDone || [];
+  if (g.opt.detOrder === "order") return g.order[(g.round - 1) % n];
+  if (g.detDone.length >= n) g.detDone = []; // 全員が1回やったら、また最初から
+  const cand = g.players.filter(p => !g.detDone.includes(p.id));
+  const net = p => p.money - p.debt; const low = Math.min(...cand.map(net));
+  const tied = g.round === 1 ? cand : cand.filter(p => net(p) === low);
+  return tied[rnd(tied.length)].id;
+}
+E.pickDet = pickDet;
 function startRound(g) {
   g.round++;
-  const n = g.order.length;
-  g.detId = g.order[(g.round - 1) % n];
+  g.detId = pickDet(g); g.detDone = g.detDone || []; g.detDone.push(g.detId);
   g.players.forEach(p => { delete p.th; delete p.det; p.rd = { start: p.money - p.debt, earn: {} }; });
   g.turn = 0; g.stage = null; g.step = 0;
   g.rT = { setup: Date.now(), play: null, stage: null, at: null, thiefMs: 0, detMs: 0 };
@@ -213,10 +231,12 @@ function startRound(g) {
   let ni = 0;
   g.players.forEach(p => {
     if (p.id === g.detId) {
-      p.det = { k: null, skills: [], cd: {}, ready: false, ambush: null, captured: [], capN: 0, capBy: {}, sprint: 0, net: false, blackout: false, secured: [], info: [], known: { tr: {}, parts: {} } };
+      const allSk = Object.keys(SKILLS); const sm = g.opt.skillMode || "draft";
+      const offer = sm === "free" ? allSk : shuffle(allSk.slice()).slice(0, sm === "random" ? 4 : 6);
+      p.det = { offer, k: null, skills: sm === "random" ? offer.slice() : [], cd: {}, ready: false, ambush: null, captured: [], capN: 0, capBy: {}, sprint: 0, net: false, blackout: false, secured: [], info: [], known: { tr: {}, parts: {} } };
     } else {
       p.th = { k: null, status: "active", loot: [], parts: {}, items: g.opt.items ? dealHand(sc.items) : [], notice: notices[ni++ % notices.length], declared: null,
-        heliCall: null, escTurn: null, escHow: null, escK: null, rescues: 0, alarmTrig: false, rel: 0, relNeed: relBase(g), relBy: [], pendingRecv: null, tp: null, stats: { moves: 0, stays: 0, unlockTry: 0, unlockOk: 0, fails: 0, timeouts: 0, items: 0 } };
+        heliCall: null, escTurn: null, escHow: null, escK: null, rescues: 0, bonus: { breakout: 0, hinder: 0, gift: 0 }, gifts: [], released: false, alarmTrig: false, rel: 0, relNeed: relBase(g), relBy: [], pendingRecv: null, tp: null, stats: { moves: 0, stays: 0, unlockTry: 0, unlockOk: 0, fails: 0, timeouts: 0, items: 0 } };
     }
   });
   g.phase = "setup";
@@ -262,7 +282,7 @@ function startThiefTurn(g) {
   for (const p of thieves(g)) {
     const th = p.th;
     if (th.status === "active") th.tp = { done: false, roll: null, stay: false, dest: null, use: {} };
-    else if (th.status === "captured") th.tp = { done: !(g.opt.breakout > 0) && !(th.items.includes("rope")) && thieves(g).some(q => q.th.status === "active"), roll: null, stay: true, dest: th.k, use: {}, captured: true, tried: false };
+    else if (th.status === "captured") th.tp = { done: !(g.opt.breakout > 0) && !(th.items.includes("rope")) && !canRelease(g, p) && thieves(g).some(q => q.th.status === "active"), roll: null, stay: true, dest: th.k, use: {}, captured: true, tried: false };
     else th.tp = null;
   }
   checkThiefDone(g);
@@ -298,19 +318,33 @@ E.thiefOptions = thiefOptions;
 function partsDone(g, th) { return PART_KEYS.filter(t => (th.parts[t] || 0) > 0).length >= g.opt.partsNeed; }
 E.partsDone = partsDone;
 
+// 保釈：捕縛中に、1ラウンド1回だけ、お金を払ってすぐ解放される（払ったお金は探偵へ）
+function canRelease(g, p) { return !!(g.opt.release !== false && p.th && p.th.status === "captured" && !p.th.released); }
+E.canRelease = canRelease;
+// 仲間から受け取ったアイテムを使ったら、渡した人に「アイテム支援」のボーナス
+function creditGift(g, p, it) {
+  const gs = p.th.gifts || []; const i = gs.findIndex(x => x.it === it); if (i < 0) return;
+  const from = P(g, gs[i].from); gs.splice(i, 1);
+  if (from && from.th) { from.th.bonus.gift++; note(g, from.id, "🎁", `${p.name}が、あなたが渡した「${ITEMS[it].name}」を使った`, [`アイテム支援ボーナス +${MONEY.gift}万円（ラウンドの終わりにもらえます）`], "good"); }
+}
+// 探偵にアイテムが効いたら、使った怪盗に「妨害成功」のボーナス
+function creditHinder(g, pid, what) {
+  const q = P(g, pid); if (!q || !q.th) return; q.th.bonus.hinder++;
+  note(g, q.id, "🎯", `妨害成功：${what}`, [`妨害成功ボーナス +${MONEY.hinder}万円（ラウンドの終わりにもらえます）`], "good");
+}
 // 捕縛中の怪盗の抜け出し：毎ターン1回サイコロを振り、決まった目以上で自力で抜け出す
 function tryBreakout(g, p) {
   const th = p.th, need = g.opt.breakout; const n = d6();
   th.stats.breakTry = (th.stats.breakTry || 0) + 1;
   if (n >= need) {
-    th.status = "active"; th.rel = 0; th.relNeed = relBase(g); th.relBy = []; th.safeT = g.turn; th.safeK = th.k;
+    th.status = "active"; th.rel = 0; th.relNeed = relBase(g); th.relBy = []; th.safeT = g.turn; th.safeK = th.k; th.bonus.breakout++;
     th.tp = { done: false, roll: null, stay: false, dest: null, use: {} };
     log(g, "all", `${p.name}が自力で抜け出しました（${nm(th.k)}）`); alog(g, p.id, "抜け出しに挑戦", { dice: n, to: nm(th.k), result: "成功" });
-    note(g, p.id, "🎲", `出目 ${n}！自力で抜け出した！`, ["このターンから動けます", "この怪盗のターンは、このマスにいる限り探偵と同じマスでも捕まりません（探偵のターンには捕まえられることがあります）"], "good", { dice: n });
+    note(g, p.id, "🎲", `出目 ${n}！自力で抜け出した！`, ["このターンから動けます", `自力で抜け出しボーナス +${MONEY.breakout}万円（ラウンドの終わりにもらえます）`, "この怪盗のターンは、このマスにいる限り探偵と同じマスでも捕まりません（探偵のターンには捕まえられることがあります）"], "good", { dice: n });
   } else {
     th.tp.tried = true; alog(g, p.id, "抜け出しに挑戦", { dice: n, to: nm(th.k), result: "失敗" });
     note(g, p.id, "🎲", `出目 ${n}…抜け出せなかった`, [`${need === 6 ? "6" : need + "以上"}が出れば抜け出せます。次のターンにまた挑戦できます`], "bad", { dice: n });
-    if (!th.items.includes("rope")) { th.tp.done = true; checkThiefDone(g); }
+    if (!th.items.includes("rope") && !canRelease(g, p)) { th.tp.done = true; checkThiefDone(g); }
   }
 }
 function thiefAct(g, p, a) {
@@ -322,7 +356,7 @@ function thiefAct(g, p, a) {
     if (it === "wire") return "ワイヤー銃は、窓のマスに止まったときの行動で使います";
     if (it === "rope") {
       if (th.status !== "captured") return "縄抜けは捕縛されているときだけ使えます";
-      th.items.splice(i, 1); th.stats.items++;
+      th.items.splice(i, 1); th.stats.items++; creditGift(g, p, it);
       th.status = "active"; th.rel = 0; th.relNeed = relBase(g); th.relBy = []; th.safeT = g.turn; th.safeK = th.k;
       th.tp = { done: false, roll: null, stay: false, dest: null, use: {} };
       log(g, "all", `${p.name}が縄抜けで自力で抜け出しました（${nm(th.k)}）`); alog(g, p.id, "アイテム", { detail: ITEMS[it].name, from: nm(th.k) });
@@ -333,6 +367,12 @@ function thiefAct(g, p, a) {
     if (tp.done) return "行動を確定したあとは使えません（確定を取り消してから使ってください）";
     if (it === "shoes") { if (tp.roll != null || tp.stay) return "俊足シューズはサイコロを振る前に使います"; tp.use.shoes = true; }
     else if (it === "key") tp.use.key = true;
+    else if (it === "kit") tp.use.kit = true;
+    else if (it === "spare") { if (!PARTS[a.part]) return "手に入れる変装パーツを選んでください"; th.parts[a.part] = (th.parts[a.part] || 0) + 1;
+      note(g, p.id, "🧩", `予備の変装パーツ：「${PARTS[a.part]}」を手に入れた`, [partsLine(th)], "good"); }
+    else if (it === "scope") { const dk = det(g).det.k; const ar = areaOf(dk);
+      log(g, "th", `🔭 双眼鏡：探偵は今 エリア${ar}（${FL(dk) + 1}階）にいます（${p.name}）`);
+      thieves(g).filter(q => q.th.status !== "escaped").forEach(q => note(g, q.id, "🔭", `双眼鏡：探偵は今 エリア${ar}（${FL(dk) + 1}階）`, [`${p.name}が双眼鏡で見つけました`], "good")); }
     else if (it === "bond") {
       if (tp.dest == null) return "仲間の絆は、捕まった仲間のマスを移動先に選んでから使います";
       const cs = thieves(g).filter(q => q.id !== p.id && q.th.status === "captured" && q.th.k === tp.dest);
@@ -358,11 +398,41 @@ function thiefAct(g, p, a) {
     else if (it === "blackout") g.blackoutNext = true;
     else if (it === "oil") { if (a.k == null || a.k < 0 || a.k > 127) return "オイルを仕掛けるマスを選んでください"; g.oils.push({ k: a.k, by: p.id }); }
     else if (it === "bug") g.bugNext = true;
-    th.items.splice(i, 1); th.stats.items++;
+    th.items.splice(i, 1); th.stats.items++; creditGift(g, p, it);
     // 探偵に影響するアイテムは、怪盗のターンの終わりに怪盗全員へまとめて知らせる
     if (["decoy", "oil", "blackout", "fake"].includes(it)) (g.itemUses = g.itemUses || []).push({ pid: p.id, it, k: a.k != null ? a.k : null });
     log(g, "th", `${p.name}が「${ITEMS[it].name}」を使いました${a.k != null ? `（${nm(a.k)}）` : ""}`);
     alog(g, p.id, "アイテム", { detail: ITEMS[it].name, to: a.k != null ? nm(a.k) : "" });
+    return null;
+  }
+  if (a.kind === "buy") {
+    const it = a.item; const I = ITEMS[it];
+    if (g.opt.shop === false) return "このゲームではアイテムを買えません";
+    if (!I || !I.shop) return "そのアイテムは買えません";
+    if (th.status !== "active") return "今は買えません";
+    if (tp.done) return "行動を確定したあとは買えません";
+    if (tp.roll != null || tp.stay) return "アイテムは、ターンの最初（サイコロを振る前）にだけ買えます";
+    if (tp.bought) return "アイテムは1ターンに1つまでです";
+    if (th.items.includes(it)) return "同じアイテムはもう持っています";
+    if (p.money < I.shop) return `お金が足りません（${I.shop}万円）`;
+    pay(g, p, I.shop, "アイテム購入"); th.items.push(it); tp.bought = it; th.stats.bought = (th.stats.bought || 0) + 1;
+    log(g, p.id, `「${I.name}」を${I.shop}万円で買いました`); alog(g, p.id, "購入", { detail: I.name, result: `${I.shop}万円` });
+    return null;
+  }
+  if (a.kind === "release") {
+    if (th.status !== "captured") return "捕縛されているときだけ使えます";
+    if (g.opt.release === false) return "このゲームでは保釈は使えません";
+    if (th.released) return "保釈はこのラウンドでもう使っています（1ラウンド1回）";
+    if (tp.tried) return "抜け出しのサイコロを振ったターンは保釈できません";
+    if (tp.done) return "このターンはもう確定しています";
+    const dp = det(g);
+    pay(g, p, MONEY.release, "保釈"); gain(dp, MONEY.release, "保釈の受け取り"); th.released = true;
+    th.status = "active"; th.rel = 0; th.relNeed = relBase(g); th.relBy = []; th.safeT = g.turn; th.safeK = th.k;
+    th.tp = { done: false, roll: null, stay: false, dest: null, use: {} };
+    log(g, "all", `${p.name}が保釈金${MONEY.release}万円を払って解放されました（${nm(th.k)}）`); alog(g, p.id, "保釈", { to: nm(th.k), result: `${MONEY.release}万円` });
+    note(g, p.id, "💴", "保釈されました！このターンから動けます", [`${MONEY.release}万円を払いました（探偵に入ります）`, "この怪盗のターンは、このマスにいる限り探偵と同じマスでも捕まりません（探偵のターンには捕まえられることがあります）"], "good");
+    note(g, dp.id, "💴", `${p.name}が保釈された`, [`保釈金 +${MONEY.release}万円`, `場所：${nm(th.k)}`], "info");
+    thieves(g).filter(q => q.id !== p.id && q.th.status !== "escaped").forEach(q => note(g, q.id, "💴", `${p.name}が保釈された`, [`場所：${nm(th.k)}`], "info"));
     return null;
   }
   if (a.kind === "breakout") {
@@ -383,7 +453,7 @@ function thiefAct(g, p, a) {
     const to = P(g, a.to);
     if (th.status !== "active" || !to || !to.th || to.th.status !== "active" || to.th.k !== th.k) return "同じマスにいる仲間にだけ渡せます";
     if (a.loot) { const i = th.loot.indexOf(a.loot); if (i < 0) return "その財宝を持っていません"; th.loot.splice(i, 1); to.th.loot.push(a.loot); g.tr.find(t => t.id === a.loot).holder = to.id; }
-    else if (a.item) { const i = th.items.indexOf(a.item); if (i < 0) return "そのアイテムを持っていません"; th.items.splice(i, 1); to.th.items.push(a.item); }
+    else if (a.item) { const i = th.items.indexOf(a.item); if (i < 0) return "そのアイテムを持っていません"; if (to.th.items.includes(a.item)) return "相手は同じアイテムをもう持っています"; th.items.splice(i, 1); to.th.items.push(a.item); to.th.gifts = to.th.gifts || []; to.th.gifts.push({ it: a.item, from: p.id }); }
     else if (a.part) { if (!(th.parts[a.part] > 0)) return "その変装パーツを持っていません"; th.parts[a.part]--; to.th.parts[a.part] = (to.th.parts[a.part] || 0) + 1; }
     else return "渡すものを選んでください";
     const what = a.loot ? g.tr.find(t => t.id === a.loot).name : a.item ? ITEMS[a.item].name : PARTS[a.part];
@@ -423,7 +493,7 @@ function thiefAct(g, p, a) {
   }
   if (a.kind === "unconfirm") {
     if (!tp.done) return null;
-    if (th.status === "captured" && !th.items.includes("rope")) return "捕縛中なので取り消すことはありません";
+    if (th.status === "captured" && !th.items.includes("rope") && !canRelease(g, p)) return "捕縛中なので取り消すことはありません";
     tp.done = false; return null;
   }
   return "不明な操作です";
@@ -460,7 +530,7 @@ function capture(g, p, why, dk) {
   else g.reveals.push({ r: g.round, t: g.turn, k: dk != null ? dk : d.det.k, text: `探偵は ${nm(dk != null ? dk : d.det.k)} にいた` });
   alog(g, p.id, "捕縛された", { detail: why, to: nm(th.k), result: `探偵=${nm(d.det.k)}` });
   const lossT = th.loot.length ? `持っている財宝（${th.loot.map(id => g.tr.find(t => t.id === id).name).join("・")}）は、仲間が受け取らないと山分けに入りません` : "";
-  note(g, p.id, "🔒", `${how}捕まった！`, [`場所：${nm(th.k)}`, `仲間の解放作業（合計${th.relNeed}ターン）か「縄抜け」で抜け出せます`, lossT], "bad");
+  note(g, p.id, "🔒", `${how}捕まった！`, [`場所：${nm(th.k)}`, `仲間の解放作業（合計${th.relNeed}ターン）・6で抜け出すサイコロ・「縄抜け」・保釈（${MONEY.release}万円・1ラウンド1回）で抜け出せます`, lossT], "bad");
   if (why === "meet") note(g, d.id, "🎯", `${p.name}が鉢合わせして捕まった！`, [`${nm(th.k)} に怪盗が止まりました`], "good");
   if (why === "ambush") note(g, d.id, "🎯", `張り込み成功！${p.name}を捕まえた`, [`場所：${nm(th.k)}`], "good");
   if (why === "disguise") note(g, d.id, "🎯", `変装を見破った！${p.name}を捕まえた`, [`場所：${nm(th.k)}`], "good");
@@ -527,6 +597,10 @@ function resolveThieves(g) {
         if (tr.stage >= tr.need) { tr.taken = true; tr.holder = p.id; th.loot.push(tr.id); log(g, "th", `${p.name}が「${tr.name}」を手に入れました`); note(g, p.id, "💎", `「${tr.name}」を手に入れた！`, [`出目 ${roll}（${tgt}以上で成功）`, `${tr.value.toLocaleString("ja-JP")}万円。脱出すれば山分けに入ります`], "good", { dice: roll }); }
         else { log(g, "th", `${p.name}：「${tr.name}」のセキュリティを1段階解除（${tr.stage}/${tr.need}）`); note(g, p.id, "🔐", `解除成功（${tr.stage}/${tr.need}段階）`, [`「${tr.name}」 出目 ${roll}（${tgt}以上で成功）`, `あと${tr.need - tr.stage}段階で手に入ります`], "good", { dice: roll }); }
         alog(g, p.id, "解除", { dice: roll, detail: `${tr.name}（${tgt}以上で成功）`, to: nm(th.k), result: tr.taken ? "入手" : "1段階成功" });
+      } else if (tp.use.kit) {
+        th.stats.fails++; log(g, "th", `${p.name}：「${tr.name}」の解除に失敗（解除キットで失敗回数に数えない）`);
+        note(g, p.id, "🧰", "解除失敗…でも解除キットのおかげで失敗に数えない", [`「${tr.name}」 出目 ${roll}（${tgt}以上で成功）`, `この財宝の失敗は ${tr.fails}回のまま`], "bad", { dice: roll });
+        alog(g, p.id, "解除", { dice: roll, detail: `${tr.name}（${tgt}以上で成功・解除キット）`, to: nm(th.k), result: "失敗（数えない）" });
       } else {
         tr.fails++; th.stats.fails++;
         log(g, "th", `${p.name}：「${tr.name}」の解除に失敗（失敗${tr.fails}回）`);
@@ -548,7 +622,7 @@ function resolveThieves(g) {
     const id = p.th.tp.use && p.th.tp.use.decoy; if (!id) continue;
     const tr = g.tr.find(t => t.id === id); if (!tr) continue;
     const u = (g.itemUses || []).find(x => x.pid === p.id && x.it === "decoy");
-    if (!tr.taken && !tr.alarm && !tr.decoy) { tr.decoy = true; ringAlarm(g, tr); log(g, "th", `（${p.name}の陽動です。本物の警報ではありません）`); if (u) u.ok = true; }
+    if (!tr.taken && !tr.alarm && !tr.decoy) { tr.decoy = true; tr.decoyBy = p.id; ringAlarm(g, tr); log(g, "th", `（${p.name}の陽動です。本物の警報ではありません）`); if (u) u.ok = true; }
     else if (u) u.ok = false;
     alog(g, p.id, "陽動", { detail: tr.name, to: nm(tr.k) });
   }
@@ -579,11 +653,8 @@ function resolveThieves(g) {
     const th = p.th, tp = th.tp; if (th.status !== "active") continue;
     if (tp.act === "wire" && b.windows.includes(th.k) && th.items.includes("wire")) { th.items.splice(th.items.indexOf("wire"), 1); th.stats.items++; escape(g, p, "wire"); continue; }
     if (b.roof.includes(th.k) && th.heliCall != null && g.turn >= th.heliCall + 2 && g.turn <= th.heliCall + 3) { escape(g, p, "heli"); continue; }
-    const exit = th.k === b.front || (g.backOpen && th.k === b.back);
-    if (exit && partsDone(g, th)) {
-      if (d.k != null && dist(d.k, th.k) <= 2) capture(g, p, "disguise");
-      else escape(g, p, "disguise");
-    }
+    const exit = b.fronts.includes(th.k) || (g.backOpen && th.k === b.back);
+    if (exit && partsDone(g, th)) escape(g, p, "disguise"); // v1.22：探偵が近くにいても見破られない（同じマスにいれば、その前に鉢合わせで捕まる）
   }
   // 張り込み
   if (d.ambush != null) {
@@ -654,10 +725,13 @@ function detAct(g, p, a) {
     }
     const from = d.k; d.k = tp.dest; const insp = inspect(g, p);
     alog(g, p.id, "移動", { from: nm(from), to: nm(d.k), dice: tp.die || "", detail: `${g.step}回目${tp.stay ? "・留まる" : ""}`, result: act });
+    // 陽動にひっかかった（陽動の財宝のマスに止まった）
+    const dtr = g.tr.find(t => t.k === d.k && t.decoy && !t.decoyPaid && t.decoyBy);
+    if (dtr) { dtr.decoyPaid = true; creditHinder(g, dtr.decoyBy, `探偵が陽動の「${dtr.name}」（${nm(d.k)}）に来た`); }
     // オイル
     const oi = g.oils.findIndex(o => o.k === d.k);
     if (oi >= 0) {
-      g.oils.splice(oi, 1);
+      const oil = g.oils[oi]; g.oils.splice(oi, 1); creditHinder(g, oil.by, `探偵が ${nm(d.k)} のオイルを踏んだ`);
       log(g, "det", `オイルで滑りました（${nm(d.k)}）。このターンの残りの行動はできません`);
       log(g, "th", `探偵が ${nm(d.k)} のオイルを踏みました`);
       g.reveals.push({ r: g.round, t: g.turn, k: d.k, text: `探偵は ${nm(d.k)} でオイルを踏んだ` });
@@ -759,7 +833,7 @@ function setupAct(g, p, a) {
     const k = +a.k; if (!(k >= 64 && k < 128)) return "スタートは2階のマスから選んでください";
     if (!detStartOK(g, k)) return "スタートは何もないマスから選んでください（財宝・変装パーツ・階段・窓・屋上階段のマスは選べません）";
     let sk = [];
-    if (g.opt.skills) { sk = [...new Set(a.skills || [])].filter(x => SKILLS[x]); if (sk.length !== 4) return "スキルを4つ選んでください"; }
+    if (g.opt.skills) { const offer = p.det.offer || Object.keys(SKILLS); sk = [...new Set(a.skills || [])].filter(x => SKILLS[x] && offer.includes(x)); if (sk.length !== 4) return "配られたスキルの中から4つ選んでください"; }
     p.det.k = k; p.det.skills = sk; p.det.ready = true; inspect(g, p);
     log(g, "all", "探偵の準備ができました");
     alog(g, p.id, "探偵の準備", { to: nm(k), detail: sk.map(x => SKILLS[x].name).join("・") });
@@ -788,7 +862,7 @@ function noticeOK(g, p) {
   const tr = id => g.tr.find(t => t.id === id);
   switch (th.notice) {
     case "top": return th.loot.some(id => tr(id).rank === "high");
-    case "disguise": return th.escHow === "disguise" && th.escK === bld(g).front;
+    case "disguise": return th.escHow === "disguise" && bld(g).fronts.includes(th.escK);
     case "early": return th.escTurn <= 8;
     case "noalarm": return !th.alarmTrig;
     case "upheli": return th.escHow === "heli" && th.loot.some(id => tr(id).floor === 1);
@@ -823,9 +897,13 @@ function endRound(g, why) {
     if (ok) gain(p, th.declared ? MONEY.noticeOpen : MONEY.noticeHidden, "予告状");
     if (th.status === "escaped" && th.loot.length) gain(p, th.escTurn <= 5 ? MONEY.flair[0] : th.escTurn <= 8 ? MONEY.flair[1] : MONEY.flair[2], "華麗さ");
     gain(p, th.rescues * MONEY.rescue, "救出");
+    if (th.status === "escaped" && th.escHow === "disguise") gain(p, MONEY.disguise, "変装脱出");
+    gain(p, th.bonus.breakout * MONEY.breakout, "自力で抜け出し");
+    gain(p, th.bonus.hinder * MONEY.hinder, "妨害成功");
+    gain(p, th.bonus.gift * MONEY.gift, "アイテム支援");
   });
   const capturedNow = ts.filter(p => p.th.status === "captured");
-  capturedNow.forEach(() => ts.forEach(p => pay(g, p, MONEY.bail, "保釈金"))); // 保釈金は銀行へ
+  capturedNow.forEach(() => ts.forEach(p => pay(g, p, MONEY.bail, "捕縛ペナルティ"))); // 捕縛ペナルティは銀行へ
   gain(dp, capturedNow.length * MONEY.endCap, "捕縛の報奨金");
   gain(dp, Object.values(d.capBy || {}).reduce((a, n) => a + Math.min(n, MONEY.capMax), 0) * MONEY.capture, "累計捕縛"); // 同じ怪盗は2回まで
   gain(dp, ts.filter(p => p.th.status === "failed").length * MONEY.failed, "脱出失敗");
@@ -841,7 +919,8 @@ function endRound(g, why) {
       loot: th ? th.loot.map(id => g.tr.find(t => t.id === id).name).join("・") : "",
       lootValue: th ? th.loot.reduce((a, id) => a + g.tr.find(t => t.id === id).value, 0) : "",
       notice: th ? NOTICES[th.notice].name : "", declared: th ? (th.declared ? "予告" : "非公開") : "", noticeOK: th ? (th.noticeOK ? "達成" : "未達成") : "",
-      share: e["山分け"] || 0, noticeBonus: e["予告状"] || 0, flair: e["華麗さ"] || 0, rescue: e["救出"] || 0, bail: e["保釈金"] || 0, endCapReward: e["捕縛の報奨金"] || 0,
+      share: e["山分け"] || 0, noticeBonus: e["予告状"] || 0, flair: e["華麗さ"] || 0, rescue: e["救出"] || 0, bail: e["捕縛ペナルティ"] || 0, disguiseBonus: e["変装脱出"] || 0, breakoutBonus: e["自力で抜け出し"] || 0, hinderBonus: e["妨害成功"] || 0, giftBonus: e["アイテム支援"] || 0,
+      releasePaid: e["保釈"] || 0, releaseGot: e["保釈の受け取り"] || 0, shopPaid: e["アイテム購入"] || 0, bought: st ? st.bought || 0 : "", endCapReward: e["捕縛の報奨金"] || 0,
       capReward: e["累計捕縛"] || 0, failReward: e["脱出失敗"] || 0, blockReward: e["予告阻止"] || 0,
       delta: (p.money - p.debt) - p.rd.start, money: p.money, debt: p.debt, net: p.money - p.debt,
       captures: p.det ? p.det.captured.length : "", capN: p.det ? p.det.capN : "", capPaid: p.det ? Object.values(p.det.capBy || {}).reduce((a, n) => a + Math.min(n, MONEY.capMax), 0) : "",
@@ -896,7 +975,7 @@ function pendingIds(g) {
 function proxyAct(g, pid) {
   const p = P(g, pid); if (!p) return "プレイヤーがいません";
   if (g.phase === "setup") {
-    if (p.det && !p.det.ready) { const sk = shuffle(Object.keys(SKILLS)).slice(0, 4); const ok = Array.from({ length: 64 }, (_, i) => 64 + i).filter(k => detStartOK(g, k)); return setupAct(g, p, { kind: "setupDet", k: ok[rnd(ok.length)], skills: sk }); }
+    if (p.det && !p.det.ready) { const sk = shuffle((p.det.offer || Object.keys(SKILLS)).slice()).slice(0, 4); const ok = Array.from({ length: 64 }, (_, i) => 64 + i).filter(k => detStartOK(g, k)); return setupAct(g, p, { kind: "setupDet", k: ok[rnd(ok.length)], skills: sk }); }
     if (p.th && p.th.declared == null) { const st = bld(g).starts; return setupAct(g, p, { kind: "declare", yes: false, start: st[rnd(st.length)] }); }
     return null;
   }
@@ -940,8 +1019,8 @@ function viewFor(g, pid) {
   };
   if (isTh) v.thieves = thieves(g).map(p => ({ id: p.id, k: p.th.k, status: p.th.status, loot: p.th.loot, parts: p.th.parts, heliCall: p.th.heliCall,
     tp: p.th.tp ? { done: p.th.tp.done, roll: p.th.tp.roll, dest: p.th.tp.dest, act: p.th.tp.act || null } : null, escHow: p.th.escHow, escTurn: p.th.escTurn }));
-  if (isDet && det(g)) { const d = det(g).det; v.det = { k: d.k, skills: d.skills, cd: d.cd, ready: d.ready, ambush: d.ambush, tp: d.tp || null, net: d.net, sprint: d.sprint, blackout: d.blackout, info: d.info.slice(-30), devices: g.devices, captured: d.captured }; }
-  if (role === "thief") { const th = me.th; v.my = { safe: isSafe(g, me), items: th.items, notice: th.notice, declared: th.declared, tp: th.tp, k: th.k, status: th.status, options: th.tp && th.tp.dest != null ? thiefOptions(g, me, th.tp.dest) : [] }; }
+  if (isDet && det(g)) { const d = det(g).det; v.det = { k: d.k, offer: d.offer || Object.keys(SKILLS), skills: d.skills, cd: d.cd, ready: d.ready, ambush: d.ambush, tp: d.tp || null, net: d.net, sprint: d.sprint, blackout: d.blackout, info: d.info.slice(-30), devices: g.devices, captured: d.captured }; }
+  if (role === "thief") { const th = me.th; v.my = { safe: isSafe(g, me), released: !!th.released, canRelease: canRelease(g, me), items: th.items, notice: th.notice, declared: th.declared, tp: th.tp, k: th.k, status: th.status, options: th.tp && th.tp.dest != null ? thiefOptions(g, me, th.tp.dest) : [] }; }
   if (reveal) { v.revealAll = true; v.alogN = g.alog.length; }
   return v;
 }
@@ -952,7 +1031,7 @@ const q = x => { const t = x === null || x === undefined ? "" : String(x); retur
 function toCSV(cols, rows) { return "﻿" + [cols.map(c => q(c[1])).join(","), ...rows.map(r => cols.map(c => q(r[c[0]])).join(","))].join("\r\n"); }
 E.ACT_COLS = [["at", "時刻"], ["round", "ラウンド"], ["turn", "ターン"], ["stage", "場面"], ["name", "プレイヤー"], ["role", "役"], ["kind", "操作"], ["from", "移動元"], ["to", "移動先・対象"], ["dice", "出目"], ["detail", "内容"], ["result", "結果"]];
 E.REC_COLS = [["round", "ラウンド"], ["name", "名前"], ["role", "役"], ["status", "結果"], ["escHow", "脱出方法"], ["escTurn", "脱出ターン"], ["loot", "持ち出した財宝"], ["lootValue", "財宝の額"],
-  ["notice", "予告状"], ["declared", "予告"], ["noticeOK", "予告達成"], ["share", "山分け"], ["noticeBonus", "予告状ボーナス"], ["flair", "華麗さ"], ["rescue", "救出"], ["bail", "保釈金"],
+  ["notice", "予告状"], ["declared", "予告"], ["noticeOK", "予告達成"], ["share", "山分け"], ["noticeBonus", "予告状ボーナス"], ["flair", "華麗さ"], ["rescue", "救出"], ["disguiseBonus", "変装脱出"], ["breakoutBonus", "自力で抜け出し"], ["hinderBonus", "妨害成功"], ["giftBonus", "アイテム支援"], ["releasePaid", "保釈(支払い)"], ["releaseGot", "保釈(受け取り)"], ["shopPaid", "アイテム購入"], ["bought", "買ったアイテム数"], ["bail", "捕縛ペナルティ"],
   ["endCapReward", "捕縛の報奨金"], ["capReward", "累計捕縛"], ["failReward", "脱出失敗の報酬"], ["blockReward", "予告阻止"], ["delta", "このラウンドの増減"], ["money", "所持金"], ["debt", "借金"], ["net", "差し引き"], ["playMin", "プレイ時間(分)"], ["setupMin", "準備の時間(分)"], ["thiefMin", "怪盗のターン合計(分)"], ["detMin", "探偵のターン合計(分)"], ["thiefSecPerTurn", "怪盗の1ターン平均(秒)"], ["detSecPerTurn", "探偵の1ターン平均(秒)"],
   ["captures", "捕縛した人数"], ["capN", "捕縛回数"], ["capPaid", "報酬の対象になった捕縛回数"], ["moves", "移動回数"], ["stays", "留まった回数"], ["unlockTry", "解除の挑戦"], ["unlockOk", "解除の成功"], ["fails", "解除の失敗"],
   ["rescues", "解放した回数"], ["items", "使ったアイテム"], ["timeouts", "時間切れ"], ["heliTurn", "ヘリを呼んだターン"], ["alarms", "鳴った警報"], ["treasuresTaken", "盗まれた財宝"], ["pot", "持ち出し合計"], ["skills", "探偵のスキル"], ["endReason", "終了理由"], ["endTurn", "終了ターン"]];

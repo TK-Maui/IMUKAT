@@ -2,7 +2,7 @@
 const E = require("../engine.js");
 let ok = 0, ng = 0; const check = (c, m) => { if (c) ok++; else { ng++; console.log("NG:", m); } };
 function setup(ropeHolder) {
-  const g = E.newGame(); g.seed = 99;
+  const g = E.newGame(); g.seed = 99; g.opt.skillMode = "free";
   for (let i = 0; i < 4; i++) g.players.push(E.newPlayer("P" + (i + 1), "名前" + (i + 1)));
   g.opt.thiefTimer = false;
   E.safeApply(g, "P1", { kind: "start" });

@@ -43,12 +43,19 @@ th,td{border-bottom:1px solid var(--line);padding:5px 4px;text-align:left;vertic
 td.n,th.n{text-align:right}
 .scroll{overflow-x:auto}
 /* マップ */
+/* エリアの色（A〜H）：マスの地の色と、出来事に出るマス名の色 */
+:root{--aA:#d9363e;--aB:#e8590c;--aC:#2b8a3e;--aD:#1971c2;--aE:#9c36b5;--aF:#0b7285;--aG:#c2255c;--aH:#8a6d00;--atint:16%}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--aA:#ff8787;--aB:#ffa94d;--aC:#69db7c;--aD:#74c0fc;--aE:#da77f2;--aF:#3bc9db;--aG:#f783ac;--aH:#ffd43b;--atint:20%}}
+:root[data-theme="dark"]{--aA:#ff8787;--aB:#ffa94d;--aC:#69db7c;--aD:#74c0fc;--aE:#da77f2;--aF:#3bc9db;--aG:#f783ac;--aH:#ffd43b;--atint:20%}
+.ac{font-weight:700}.ac-A{color:var(--aA)}.ac-B{color:var(--aB)}.ac-C{color:var(--aC)}.ac-D{color:var(--aD)}.ac-E{color:var(--aE)}.ac-F{color:var(--aF)}.ac-G{color:var(--aG)}.ac-H{color:var(--aH)}
+.cell.ar-A{--ac:var(--aA)}.cell.ar-B{--ac:var(--aB)}.cell.ar-C{--ac:var(--aC)}.cell.ar-D{--ac:var(--aD)}.cell.ar-E{--ac:var(--aE)}.cell.ar-F{--ac:var(--aF)}.cell.ar-G{--ac:var(--aG)}.cell.ar-H{--ac:var(--aH)}
 .floorwrap{margin:8px 0}
 .floorttl{display:flex;justify-content:space-between;align-items:baseline;font-weight:700;font-size:14px}
 .board{display:grid;grid-template-columns:repeat(8,1fr);gap:2px;width:100%;max-width:460px;margin:4px auto;position:relative}
 .cell{aspect-ratio:1;border-radius:5px;background:var(--cell);border:1px solid var(--line);position:relative;padding:0;min-height:0;font-size:11px;line-height:1;overflow:hidden;color:var(--ink)}
-.cell.q1{background:var(--cell2)}
-.cell.fx{background:var(--fixed)}
+.cell[class*="ar-"]{background:color-mix(in srgb,var(--ac) var(--atint),var(--cell))}
+.cell.fx{background:color-mix(in srgb,var(--ac,transparent) var(--atint),var(--fixed))}
+.cell .co{color:var(--ac,var(--sub))!important;opacity:.95!important;font-weight:700}
 .cell.reach{background:var(--reach);border-color:var(--accent)}
 .cell.sel{box-shadow:inset 0 0 0 3px var(--accent);background:var(--hi)}
 .cell.tap{cursor:pointer}
@@ -310,7 +317,7 @@ function undoLast(){
   return null;
 }
 function actLabel(pid,a){const p=S.game&&E.P(S.game,pid);const n=p?p.name:"";
-  const K={start:"ゲーム開始",nextRound:"次のラウンドへ",setupDet:"探偵の準備",declare:"予告状の選択",useItem:"アイテム",heli:"ヘリを呼ぶ",give:"譲渡",roll:"サイコロ",stay:"その場に留まる",dest:"移動先",confirm:"行動の確定",unconfirm:"確定の取り消し",skill:"スキル",act:"行動",endTurn:"ターン終了",proxy:"代わりに進める",timeout:"時間切れ"};
+  const K={buy:"アイテム購入",release:"保釈",breakout:"抜け出しに挑戦",start:"ゲーム開始",nextRound:"次のラウンドへ",setupDet:"探偵の準備",declare:"予告状の選択",useItem:"アイテム",heli:"ヘリを呼ぶ",give:"譲渡",roll:"サイコロ",stay:"その場に留まる",dest:"移動先",confirm:"行動の確定",unconfirm:"確定の取り消し",skill:"スキル",act:"行動",endTurn:"ターン終了",proxy:"代わりに進める",timeout:"時間切れ"};
   return `${n?n+"：":""}${K[a&&a.kind]||a&&a.kind}${a&&a.kind==="useItem"?"（"+E.ITEMS[a.item].name+"）":""}${a&&a.kind==="skill"?"（"+E.SKILLS[a.id].name+"）":""}`}
 function hostApply(pid,a,fn,label){
   const before=JSON.stringify(S.game);
@@ -609,12 +616,15 @@ function showNotes(){
   const allIds=fresh.map(n=>n.id);
   const show=fresh.slice(-6);const sig=show.map(n=>n.id).join(",");
   if(box.dataset.sig===sig)return;box.dataset.sig=sig;
-  box.innerHTML=`<div class="nwrap" role="alertdialog" aria-label="行動の結果">${show.map(n=>`<div class="ncard ${n.tone}"><div class="nt"><span class="ni">${n.icon}</span><span>${esc(n.title)}</span></div>${n.lines.length?`<ul>${n.lines.map(l=>`<li>${esc(l)}</li>`).join("")}</ul>`:""}<div class="nm">${n.t}ターン目</div></div>`).join("")}<button class="primary nok" id="bnoteok">OK</button></div>`;
+  box.innerHTML=`<div class="nwrap" role="alertdialog" aria-label="行動の結果">${show.map(n=>`<div class="ncard ${n.tone}"><div class="nt"><span class="ni">${n.icon}</span><span>${areaTxt(n.title)}</span></div>${n.lines.length?`<ul>${n.lines.map(l=>`<li>${areaTxt(l)}</li>`).join("")}</ul>`:""}<div class="nm">${n.t}ターン目</div></div>`).join("")}<button class="primary nok" id="bnoteok">OK</button></div>`;
   const close=()=>{markSeen(allIds);box.remove()};
   document.getElementById("bnoteok").onclick=close;
   box.onclick=e=>{if(e.target===box)close()};
 }
 
+// マス名（A-1〜H-16）とエリア名を、そのエリアの色で表示する
+function areaTxt(t){return esc(t).replace(/(^|[^A-Za-z0-9])([A-H])-(1[0-6]|[1-9])(?![0-9])/g,(m,a,L,n)=>`${a}<b class="ac ac-${L}">${L}-${n}</b>`).replace(/エリア([A-H])(?![A-Za-z])/g,(m,L)=>`エリア<b class="ac ac-${L}">${L}</b>`)}
+function nmc(k){if(k==null||k<0)return "-";const n=E.nm(k);return `<b class="ac ac-${n[0]}">${n}</b>`}
 function render(){
   const v=V();if(!v){renderTitle();return}
   let h=`<div class="row"><h1 class="grow">IMUKAT <span class="sub">${esc(VERSION)}</span></h1><span class="sub">${S.mode==="local"?"1台モード":"部屋 "+esc(S.code)}</span></div>`;
@@ -671,13 +681,17 @@ function renderLobby(v){
   <tr><td>探偵スキル（仮）</td><td><label><input type="checkbox" id="o_sk" ${o.skills?"checked":""} ${can?"":"disabled"}> 使う</label></td></tr>
   <tr><td>捕縛の判定</td><td><select id="o_cap" ${can?"":"disabled"}><option value="land" ${o.capture==="land"?"selected":""}>止まったマス</option><option value="near2" ${o.capture==="near2"?"selected":""}>2マス以内の捜査宣言</option></select></td></tr>
   <tr><td>変装に必要なパーツ</td><td><select id="o_pn" ${can?"":"disabled"}>${[2,3,4].map(n=>`<option ${o.partsNeed===n?"selected":""}>${n}</option>`).join("")}</select>種類</td></tr>
-  <tr><td>アイテムカード（1人あたり）</td><td><select id="o_in" ${can?"":"disabled"}><option value="">人数に合わせる（今は${E.scaleFor({players:v.players,opt:{}}).items}枚）</option>${[1,2,3,4].map(n=>`<option value="${n}" ${o.itemN===n?"selected":""}>${n}枚</option>`).join("")}</select></td></tr>
+  <tr><td>配られるアイテム（1人あたり）</td><td><select id="o_in" ${can?"":"disabled"}><option value="">人数に合わせる（今は${E.scaleFor({players:v.players,opt:{}}).items}枚）</option>${[1,2,3,4].map(n=>`<option value="${n}" ${o.itemN===n?"selected":""}>${n}枚</option>`).join("")}</select></td></tr>
   <tr><td>財宝の数</td><td><select id="o_tn" ${can?"":"disabled"}><option value="">人数に合わせる（今は${E.scaleFor({players:v.players,opt:{}}).tr}つ）</option>${[4,5,6].map(n=>`<option value="${n}" ${o.trN===n?"selected":""}>${n}つ</option>`).join("")}</select></td></tr>
   <tr><td>捕縛中の抜け出しサイコロ</td><td><select id="o_bk" ${can?"":"disabled"}>${[[6,"6で成功"],[5,"5以上で成功"],[0,"なし"]].map(([n,t])=>`<option value="${n}" ${(o.breakout==null?6:o.breakout)===n?"selected":""}>${t}</option>`).join("")}</select></td></tr>
   <tr><td>解放に必要な作業</td><td><select id="o_rel" ${can?"":"disabled"}>${[1,2,3].map(n=>`<option value="${n}" ${(o.relTurns||1)===n?"selected":""}>${n}ターン</option>`).join("")}</select></td></tr>
+  <tr><td>探偵のスキルの選び方</td><td><select id="o_skm" ${can?"":"disabled"}>${[["draft","6つ配られて4つ選ぶ"],["free","全部から4つ選ぶ"],["random","4つランダム"]].map(([x,t])=>`<option value="${x}" ${(o.skillMode||"draft")===x?"selected":""}>${t}</option>`).join("")}</select></td></tr>
+  <tr><td>探偵をする順番</td><td><select id="o_do" ${can?"":"disabled"}>${[["poor","所持金が少ない人から"],["order","参加した順"]].map(([x,t])=>`<option value="${x}" ${(o.detOrder||"poor")===x?"selected":""}>${t}</option>`).join("")}</select><div class="sub">所持金が少ない人から：まだ探偵をしていない人の中で、所持金がいちばん少ない人が探偵（1ラウンド目と同点はランダム）。全員1回は必ず探偵をします</div></td></tr>
+  <tr><td>アイテムの購入</td><td><label><input type="checkbox" id="o_shop" ${o.shop!==false?"checked":""} ${can?"":"disabled"}> あり</label></td></tr>
+  <tr><td>保釈（捕縛中にお金で解放）</td><td><label><input type="checkbox" id="o_relm" ${o.release!==false?"checked":""} ${can?"":"disabled"}> あり（${E.MONEY.release}万円・1ラウンド1回）</label></td></tr>
   <tr><td>ラウンド数</td><td><select id="o_rounds" ${can?"":"disabled"}><option value="">人数と同じ（全員1回探偵）</option>${[1,2,3,4,5,6].map(n=>`<option value="${n}" ${o.rounds===n?"selected":""}>${n}ラウンド</option>`).join("")}</select></td></tr>
   </table>`;
-  if(can)h+=`<div class="row" style="margin-top:10px"><button class="primary" id="bstart" ${v.players.length<2?"disabled":""}>この${v.players.length}人で始める</button></div><div class="sub">本番は4〜6人想定です（テスト用に2人から始められます）。1ラウンド目の探偵は、参加した順の1番目の人です。</div>`;
+  if(can)h+=`<div class="row" style="margin-top:10px"><button class="primary" id="bstart" ${v.players.length<2?"disabled":""}>この${v.players.length}人で始める</button></div><div class="sub">本番は4〜6人想定です（テスト用に2人から始められます）。探偵をする順番は上の設定で決まります（全員1回ずつ）。</div>`;
   else h+=`<div class="sub">部屋を作った人が開始するまでお待ちください。</div>`;
   return h+`</div>`;
 }
@@ -686,7 +700,7 @@ function renderLobby(v){
 function reachV(v,from,n){return E.reach({building:v.bid,blocks:(v.blocks||[]).map(i=>({i,until:1e9})),turn:0},from,n)}
 function mapHTML(v,o){
   o=o||{};const b=E.bld({building:v.bid});
-  const fixed={};fixed[b.front]="正";fixed[b.back]="裏";b.stairs.forEach((p,i)=>p.forEach(k=>fixed[k]=(v.blocks||[]).includes(i)?"⛔":"階"));b.roof.forEach(k=>fixed[k]="屋");b.windows.forEach(k=>fixed[k]="窓");
+  const fixed={};b.fronts.forEach(k=>fixed[k]="正");fixed[b.back]="裏";b.stairs.forEach((p,i)=>p.forEach(k=>fixed[k]=(v.blocks||[]).includes(i)?"⛔":"階"));b.roof.forEach(k=>fixed[k]="屋");b.windows.forEach(k=>fixed[k]="窓");
   const sel=new Set(o.sel||[]);const tap=o.tap||new Set();
   const myRole=v.role, all=!!v.revealAll;
   const lastRev=(v.reveals||[]).filter(r=>r.r===v.round&&r.t>=v.turn-1&&r.k!=null);
@@ -694,7 +708,7 @@ function mapHTML(v,o){
     let c="";
     for(let r=0;r<8;r++)for(let cc=0;cc<8;cc++){
       const k=E.K(f,r,cc);const q=((r>=4)+(cc>=4))%2;
-      const cls=["cell"];if(q)cls.push("q1");if(fixed[k])cls.push("fx");if(tap.has&&tap.has(k))cls.push("reach","tap");if(sel.has(k))cls.push("sel");if(o.anyTap)cls.push("tap");
+      const cls=["cell","ar-"+E.areaOf(k)];if(fixed[k])cls.push("fx");if(tap.has&&tap.has(k))cls.push("reach","tap");if(sel.has(k))cls.push("sel");if(o.anyTap)cls.push("tap");
       let in_="";
       if(fixed[k])in_+=`<span class="fxl">${fixed[k]}</span>`;
       const capd=v.players.filter(p=>p.capK===k);
@@ -723,7 +737,7 @@ function mapHTML(v,o){
       in_+=`<span class="co">${E.nm(k).replace("-","")}</span>`;
       c+=`<button class="${cls.join(" ")}" data-k="${k}">${in_}</button>`;
     }
-    return `<div class="floorwrap"><div class="floorttl"><span>${f+1}階（${f?"E F / G H":"A B / C D"}）</span><span class="sub">${f?"屋＝屋上階段・窓＝窓":"正＝正面ゲート・裏＝裏口"}・階＝階段</span></div><div class="board">${c}</div></div>`;
+    return `<div class="floorwrap"><div class="floorttl"><span>${f+1}階（${(f?["E","F","G","H"]:["A","B","C","D"]).map(a=>`<span class="ac ac-${a}">${a}</span>`).join(" ")}）</span><span class="sub">${f?"屋＝屋上階段・窓＝窓":"正＝正面ゲート・裏＝裏口"}・階＝階段</span></div><div class="board">${c}</div></div>`;
   };
   const floors=o.floors||[0,1];
   return floors.map(floorHTML).join("")+`<div class="legend"><span>高/普/安＝財宝</span><span style="color:var(--part)">服面証棒＝変装パーツ</span><span>●＝足跡（薄いのは2ターン前）</span>${myRole==="det"||all?"<span>🕵＝探偵</span>":""}${myRole==="det"?"<span>✕・薄い字＝調べたらなくなっていた／数字＝調べたときの解除段階（探偵は止まったマスの財宝・変装パーツだけ状況が分かります）</span>":""}${myRole!=="det"?"<span>オレンジの枠＝探偵がいた場所（1つ前のターンまで）</span>":""}<span>⛓＝捕縛中</span><span>点線の丸＝移動予定</span></div>`;
@@ -735,9 +749,11 @@ function renderSetup(v){
   const pend=v.pending||[];
   if(v.role==="det"){
     if(!v.det.ready){
-      const sel=S.ui.skills||[];const st=S.ui.start;
-      h+=`<div class="panel me"><b>🕵 探偵の準備</b><div class="sub">2階のマップでスタート地点を選んでください（何もないマスだけ選べます。財宝・変装パーツ・階段・窓・屋上階段のマスは選べません）${v.opt.skills?"。スキルを4つ選んでください（右の🔍からも説明を見られます）":""}。</div>`;
-      if(v.opt.skills)h+=`<div class="acts">${Object.entries(E.SKILLS).map(([id,s])=>`<button data-skpick="${id}" class="${sel.includes(id)?"on primary":""}"><b>${esc(s.name)}</b><small>${s.ct?`使ったあと${s.ct}ターン休み`:"1財宝1回"}</small></button>`).join("")}</div><div class="sub">選んだスキル：${sel.length}/4</div>`;
+      if((v.opt.skillMode||"draft")==="random"&&v.det.offer)S.ui.skills=v.det.offer.slice(0,4);const sel=S.ui.skills||[];const st=S.ui.start;
+      h+=`<div class="panel me"><b>🕵 探偵の準備</b><div class="sub">2階のマップでスタート地点を選んでください（何もないマスだけ選べます。財宝・変装パーツ・階段・窓・屋上階段のマスは選べません）${v.opt.skills?"。スキルの説明は右の🔍からも見られます":""}。</div>`;
+      const offer=v.det.offer||Object.keys(E.SKILLS);const sm=v.opt.skillMode||"draft";
+      if(v.opt.skills&&sm==="random"){S.ui.skills=offer.slice(0,4);h+=`<div class="sub" style="margin-top:6px">このラウンドのスキル（ランダム）：<b>${offer.map(id=>esc(E.SKILLS[id].name)).join("・")}</b></div>`}
+      else if(v.opt.skills)h+=`<div class="sub" style="margin-top:6px">${sm==="draft"?`配られた${offer.length}つのスキルから4つ選んでください`:"全スキルから4つ選んでください"}</div><div class="acts">${offer.map(id=>{const s=E.SKILLS[id];return `<button data-skpick="${id}" class="${sel.includes(id)?"on primary":""}"><b>${esc(s.name)}</b><small>${s.ct?`使ったあと${s.ct}ターン休み`:"1財宝1回"}</small></button>`}).join("")}</div><div class="sub">選んだスキル：${sel.length}/4</div>`;
       h+=`<div class="sub" style="margin-top:6px">スタート地点：<b>${st!=null?E.nm(st):"未選択"}</b></div>`;
       h+=`<div class="row" style="margin-top:6px"><button class="primary" id="bsetdet" ${st!=null&&(!v.opt.skills||sel.length===4)?"":"disabled"}>準備完了</button><button id="bsetrand">おまかせで選ぶ</button></div></div>`;
       h+=mapHTML(v,{floors:[1],tap:new Set(detStartSquares(v)),sel:st!=null?[st]:[]});
@@ -765,7 +781,7 @@ function renderPlay(v){
   if(v.role==="thief")h+=thiefPanel(v);
   else if(v.role==="det")h+=detPanel(v);
   h+=mapHTML(v,S.ui.mapOpt||{});
-  h+=`<div class="panel"><b>最近の出来事</b><div class="log">${v.log.slice(-12).reverse().map(l=>`<div><span class="sub">R${l.r}-${l.t}T</span> ${esc(l.m)}</div>`).join("")}</div></div>`;
+  h+=`<div class="panel"><b>最近の出来事</b><div class="log">${v.log.slice(-12).reverse().map(l=>`<div><span class="sub">R${l.r}-${l.t}T</span> ${areaTxt(l.m)}</div>`).join("")}</div></div>`;
   return h;
 }
 function myThief(v){return (v.thieves||[]).find(t=>t.id===v.me)}
@@ -778,14 +794,16 @@ function thiefPanel(v){
   S.ui.mapOpt={};
   let h=`<div class="panel me">`;
   const partsN=E.PART_KEYS.filter(t=>(me.parts[t]||0)>0).length;
-  h+=`<div class="stat"><div>現在地 <b>${E.nm(me.k)}</b></div><div>財宝 <b>${me.loot.length?me.loot.map(id=>esc(v.tr.find(t=>t.id===id).name)).join("・"):"なし"}</b></div><div>変装パーツ <b>${partsN}/${v.opt.partsNeed}</b>${partsN>=v.opt.partsNeed?" ✅":""}</div><div>ヘリ <b>${me.heliCall==null?"未使用":`${me.heliCall+2}〜${me.heliCall+3}ターン目`}</b></div></div>${partsHTML(me.parts,v.opt.partsNeed)}${my.safe?`<div class="sub ok" style="margin-top:6px">🛡 抜け出したばかり：この怪盗のターンは、${E.nm(me.k)} にいる限り探偵と同じマスでも捕まりません（動くと通常どおり。探偵のターンには捕まえられることがあります）</div>`:""}`;
+  h+=`<div class="stat"><div>現在地 ${nmc(me.k)}</div><div>財宝 <b>${me.loot.length?me.loot.map(id=>esc(v.tr.find(t=>t.id===id).name)).join("・"):"なし"}</b></div><div>変装パーツ <b>${partsN}/${v.opt.partsNeed}</b>${partsN>=v.opt.partsNeed?" ✅":""}</div><div>ヘリ <b>${me.heliCall==null?"未使用":`${me.heliCall+2}〜${me.heliCall+3}ターン目`}</b></div></div>${partsHTML(me.parts,v.opt.partsNeed)}${my.safe?`<div class="sub ok" style="margin-top:6px">🛡 抜け出したばかり：この怪盗のターンは、${E.nm(me.k)} にいる限り探偵と同じマスでも捕まりません（動くと通常どおり。探偵のターンには捕まえられることがあります）</div>`:""}`;
   if(v.stage!=="thief"){h+=`<div style="margin-top:8px">探偵のターンです。待っています…</div></div>`;return h+teamHTML(v)}
   if(me.status==="escaped"){h+=`<div style="margin-top:8px">🏁 脱出しました。ラウンドの終わりを待っています。</div></div>`;return h}
   if(me.status==="captured"){
     h+=`<div style="margin-top:8px">⛓ 捕縛されています。仲間がこのマスで解放作業をすると抜け出せます（${pl(v.me).rel||0}/${pl(v.me).relNeed}）。</div>`;
     const rp=my.items.includes("rope");const bk=v.opt.breakout>0&&tp&&!tp.done&&!tp.tried;
     if(v.opt.breakout>0)h+=`<div class="sub">毎ターン1回、サイコロで${v.opt.breakout>=6?"6":v.opt.breakout+"以上"}が出れば自力で抜け出せます。${tp&&tp.tried?"（このターンは挑戦済み）":""}</div>`;
-    if(rp||(tp&&!tp.done))h+=`<div class="row" style="margin-top:6px">${bk?`<button class="primary" id="bbreak">🎲 抜け出しに挑戦</button>`:""}${rp?`<button class="primary" data-use="rope">🪢 縄抜けを使う</button>`:""}${tp&&!tp.done?`<button id="bconf">このターンは待つ</button>`:""}</div>`;
+    const rl=my.canRelease&&tp&&!tp.done&&!tp.tried;
+    if(v.opt.release!==false)h+=`<div class="sub">保釈：${E.MONEY.release}万円を払うと、すぐ解放されます（1ラウンド1回・払ったお金は探偵へ・サイコロで抜け出しに挑戦したターンは使えません）。${my.released?"（このラウンドは使用済み）":""}</div>`;
+    if(rp||(tp&&!tp.done))h+=`<div class="row" style="margin-top:6px">${bk?`<button class="primary" id="bbreak">🎲 抜け出しに挑戦</button>`:""}${rl?`<button id="brelease">💴 保釈（${E.MONEY.release}万円）</button>`:""}${rp?`<button class="primary" data-use="rope">🪢 縄抜けを使う</button>`:""}${tp&&!tp.done?`<button id="bconf">このターンは待つ</button>`:""}</div>`;
     return h+`</div>`+teamHTML(v);
   }
   if(!tp){return h+`</div>`}
@@ -793,6 +811,7 @@ function thiefPanel(v){
   // 準備：アイテムの対象選択中
   if(S.ui.itemTarget){h+=`<div style="margin-top:8px"><b>「${esc(E.ITEMS[S.ui.itemTarget].name)}」を置くマスをマップで選んでください</b></div><div class="row"><button id="bitemcancel">やめる</button></div></div>`;S.ui.mapOpt={anyTap:true};return h}
   const free=[];
+  if(v.opt.shop!==false&&tp.roll==null&&!tp.stay)free.push(tp.bought?`<button disabled>🛒 購入済み<small>「${esc(E.ITEMS[tp.bought].name)}」</small></button>`:`<button id="bshop">🛒 アイテムを買う<small>1ターンに1つ・サイコロの前だけ</small></button>`);
   if(me.heliCall==null)free.push(`<button id="bheli">🚁 ヘリを呼ぶ<small>${v.turn+2}ターン目の始めに到着</small></button>`);
   const mates=v.thieves.filter(t=>t.id!==me.id&&t.status==="active"&&t.k===me.k);
   if(mates.length)free.push(`<button id="bgive">🤝 仲間に渡す<small>同じマスにいる仲間</small></button>`);
@@ -805,7 +824,7 @@ function thiefPanel(v){
     const opts=my.options||["none"];
     if(!S.ui.act||!opts.includes(S.ui.act))S.ui.act=opts.includes("unlock")?"unlock":opts.includes("release")?"release":opts.includes("wire")?"wire":"none";
     const pt=v.parts.find(x=>x.k===tp.dest&&!x.taken);
-    h+=`<div style="margin-top:8px"><b>移動先：${E.nm(tp.dest)}</b> ${tp.stay?"（留まる）":`<button id="bredest" style="min-height:32px;padding:2px 10px">選び直す</button>`}</div>
+    h+=`<div style="margin-top:8px"><b>移動先：</b>${nmc(tp.dest)} ${tp.stay?"（留まる）":`<button id="bredest" style="min-height:32px;padding:2px 10px">選び直す</button>`}</div>
     <div class="acts">${opts.map(o=>`<button data-act="${o}" class="${S.ui.act===o?"on primary":""}">${actName(o)}${o==="unlock"?`<small>${unlockHint(v,tp.dest)}</small>`:""}</button>`).join("")}</div>
     ${pt?`<label class="row" style="margin-top:6px"><input type="checkbox" id="cpick" ${S.ui.pick!==false?"checked":""}> 変装パーツ「${esc(E.PARTS[pt.type])}」を拾う</label>`:""}
     ${exitHint(v,me,tp.dest)}
@@ -821,16 +840,16 @@ function unlockHint(v,k){const t=v.tr.find(x=>x.k===k&&!x.taken);if(!t)return ""
 function exitHint(v,me,k){
   const b=E.bld({building:v.bid});const parts=E.PART_KEYS.filter(t=>(me.parts[t]||0)>0).length;
   if(b.roof.includes(k))return me.heliCall!=null&&v.turn>=me.heliCall+2&&v.turn<=me.heliCall+3?`<div class="sub ok">🚁 自分のヘリが待機中。止まると脱出します</div>`:`<div class="sub">屋上階段：自分のヘリが待機中（呼んだ2〜3ターン後）なら脱出できます</div>`;
-  if(k===b.front||(v.backOpen&&k===b.back))return parts>=v.opt.partsNeed?`<div class="sub ok">🎭 変装パーツがそろっているので、止まると変装して脱出します（探偵が2マス以内にいると捕縛）</div>`:`<div class="sub">変装パーツが${v.opt.partsNeed}種類そろうと、ここから脱出できます</div>`;
+  if(b.fronts.includes(k)||(v.backOpen&&k===b.back))return parts>=v.opt.partsNeed?`<div class="sub ok">🎭 変装パーツがそろっているので、止まると変装して脱出します（探偵が同じマスにいると、その前に鉢合わせで捕まります）</div>`:`<div class="sub">変装パーツが${v.opt.partsNeed}種類そろうと、ここから脱出できます</div>`;
   return "";
 }
 function teamHTML(v){
-  return `<div class="panel"><b>怪盗チーム（共有マップ）</b><table>${v.thieves.map(t=>`<tr><td>${chip(t.id)}</td><td>${E.nm(t.k)}</td><td>${{active:t.tp?(t.tp.done?"✅確定":"考え中"):"",captured:"⛓捕縛中",escaped:"🏁脱出",failed:"✖失敗"}[t.status]}</td><td class="sub">${t.loot.map(id=>esc(v.tr.find(x=>x.id===id).name)).join("・")}${partsHTML(t.parts,v.opt.partsNeed,true)}</td></tr>`).join("")}</table>
-  <div class="sub">財宝のセキュリティ：${v.tr.filter(t=>!t.taken).map(t=>`${esc(t.name)}（${E.nm(t.k)}）${t.stage}/${t.need}段・失敗${t.fails}${t.decoy?"🎭陽動":t.alarm?"🚨":""}`).join("／")}</div>${v.floorHint?`<div class="sub">盗聴器：探偵は${v.floorHint.t}ターン目の終わりに${v.floorHint.f+1}階にいた</div>`:""}</div>`;
+  return `<div class="panel"><b>怪盗チーム（共有マップ）</b><table>${v.thieves.map(t=>`<tr><td>${chip(t.id)}</td><td>${nmc(t.k)}</td><td>${{active:t.tp?(t.tp.done?"✅確定":"考え中"):"",captured:"⛓捕縛中",escaped:"🏁脱出",failed:"✖失敗"}[t.status]}</td><td class="sub">${t.loot.map(id=>esc(v.tr.find(x=>x.id===id).name)).join("・")}${partsHTML(t.parts,v.opt.partsNeed,true)}</td></tr>`).join("")}</table>
+  <div class="sub">財宝のセキュリティ：${v.tr.filter(t=>!t.taken).map(t=>`${esc(t.name)}（${nmc(t.k)}）${t.stage}/${t.need}段・失敗${t.fails}${t.decoy?"🎭陽動":t.alarm?"🚨":""}`).join("／")}</div>${v.floorHint?`<div class="sub">盗聴器：探偵は${v.floorHint.t}ターン目の終わりに${v.floorHint.f+1}階にいた</div>`:""}</div>`;
 }
 function detPanel(v){
   const d=v.det;const tp=d.tp;S.ui.mapOpt={};
-  let h=`<div class="panel me"><div class="stat"><div>現在地 <b>${E.nm(d.k)}</b></div><div>捕縛した人数 <b>${d.captured.length}</b></div></div>`;
+  let h=`<div class="panel me"><div class="stat"><div>現在地 ${nmc(d.k)}</div><div>捕縛した人数 <b>${d.captured.length}</b></div></div>`;
   if(v.stage!=="det"){h+=`<div style="margin-top:8px">怪盗のターンです。待っています…</div>${infoHTML(d)}</div>`;return h}
   h+=`<div style="margin-top:6px"><b>${v.step}回目の移動と行動</b>（1ターンに2回）${d.net?" ・包囲網中":""}${d.sprint?" ・全力疾走+3":""}${d.blackout?" ・停電中（スキル不可）":""}</div>`;
   if(S.ui.capTarget){h+=`<div class="sub">捜査するマス（${E.nm(tp.dest)}から2マス以内）をマップで選んでください</div><div class="row"><button id="bcapcancel">やめる</button></div>`;
@@ -840,7 +859,7 @@ function detPanel(v){
   }else if(tp.dest==null){
     h+=`<div style="margin-top:6px"><b>出目 ${tp.roll}：移動先をマップで選んでください</b></div>`;S.ui.mapOpt={tap:new Set(reachV(v,d.k,tp.roll))};
   }else{
-    h+=`<div style="margin-top:6px"><b>移動先：${E.nm(tp.dest)}</b> ${tp.stay?"（留まる）":`<button id="bredest" style="min-height:32px;padding:2px 10px">選び直す</button>`}</div>
+    h+=`<div style="margin-top:6px"><b>移動先：</b>${nmc(tp.dest)} ${tp.stay?"（留まる）":`<button id="bredest" style="min-height:32px;padding:2px 10px">選び直す</button>`}</div>
     <div class="acts"><button class="primary" id="bcap">🫳 捕縛する<small>${v.opt.capture==="near2"?"2マス以内のマスを捜査":"このマスを調べる"}${d.net?"（包囲網）":""}</small></button>
     <button id="bamb" ${tp.stay?"":"disabled"}>👁 張り込み<small>${tp.stay?"上下左右1マスも捕縛・ターン終了":"留まるときだけ"}</small></button>
     <button id="bpass">何もしない</button></div>`;
@@ -849,11 +868,11 @@ function detPanel(v){
   h+=`<div class="row" style="margin-top:8px"><button id="bendturn" class="danger">ターンを終える</button></div><div class="sub">スキルは右の🔍から使えます。</div>${infoHTML(d)}</div>`;
   return h;
 }
-function infoHTML(d){const inf=(d.info||[]).slice(-6).reverse();return inf.length?`<div style="margin-top:8px"><b>調査メモ</b><div class="log">${inf.map(i=>`<div><span class="sub">${i.t}T</span> ${esc(i.m)}</div>`).join("")}</div></div>`:""}
+function infoHTML(d){const inf=(d.info||[]).slice(-6).reverse();return inf.length?`<div style="margin-top:8px"><b>調査メモ</b><div class="log">${inf.map(i=>`<div><span class="sub">${i.t}T</span> ${areaTxt(i.m)}</div>`).join("")}</div></div>`:""}
 
 /* ---------- ラウンド終了・ゲーム終了 ---------- */
 function recTable(recs){
-  const show=[["name","名前"],["role","役"],["status","結果"],["escHow","脱出"],["loot","財宝"],["notice","予告状"],["declared","予告"],["noticeOK","達成"],["share","山分け"],["noticeBonus","予告"],["flair","華麗さ"],["rescue","救出"],["bail","保釈金"],["endCapReward","捕縛報奨"],["capReward","累計捕縛"],["failReward","脱出失敗"],["blockReward","予告阻止"],["delta","増減"],["net","所持金(差引)"]];
+  const show=[["name","名前"],["role","役"],["status","結果"],["escHow","脱出"],["loot","財宝"],["notice","予告状"],["declared","予告"],["noticeOK","達成"],["share","山分け"],["noticeBonus","予告"],["flair","華麗さ"],["rescue","救出"],["disguiseBonus","変装脱出"],["breakoutBonus","抜け出し"],["hinderBonus","妨害成功"],["giftBonus","アイテム支援"],["releasePaid","保釈"],["releaseGot","保釈受取"],["shopPaid","購入"],["bail","捕縛ペナルティ"],["endCapReward","捕縛報奨"],["capReward","累計捕縛"],["failReward","脱出失敗"],["blockReward","予告阻止"],["delta","増減"],["net","所持金(差引)"]];
   return `<div class="scroll"><table><tr>${show.map(c=>`<th>${c[1]}</th>`).join("")}</tr>${recs.map(r=>`<tr>${show.map(c=>`<td class="${typeof r[c[0]]==="number"?"n":""}">${esc(r[c[0]]===""?"-":r[c[0]])}</td>`).join("")}</tr>`).join("")}</table></div>`;
 }
 function renderRoundEnd(v){
@@ -903,7 +922,7 @@ function openMoney(){
   const v=V();const rank=v.players.map(p=>({p,net:p.money-p.debt})).sort((a,b)=>b.net-a.net||b.p.totalDet-a.p.totalDet);
   dlg(`<h2 style="margin-top:0">💰 みんなの所持金</h2><table><tr><th></th><th>名前</th><th class="n">所持金</th><th class="n">探偵での稼ぎ</th></tr>
   ${rank.map((r,i)=>`<tr><td>${i+1}位</td><td style="white-space:nowrap">${chip(r.p.id)}${r.p.role==="det"?" 🕵":""}</td><td class="n" style="white-space:nowrap"><b>${yen(r.net)}</b>${r.p.debt?`<br><small class="ng">借金 ${yen(r.p.debt)}込み</small>`:""}</td><td class="n" style="white-space:nowrap">${yen(r.p.totalDet)}</td></tr>`).join("")}</table>
-  <div class="sub">所持金は借金を差し引いた額です。お金が動くのはラウンドの終わり（山分け・ボーナス・保釈金・報奨金）です。同点なら探偵ラウンドの稼ぎが多い人が上です。</div>`);
+  <div class="sub">所持金は借金を差し引いた額です。お金が動くのは、アイテムの購入と保釈（そのとき）と、ラウンドの終わり（山分け・ボーナス・捕縛ペナルティ・報奨金）です。同点なら探偵ラウンドの稼ぎが多い人が上です。</div>`);
 }
 function openItems(){
   const v=V();const my=v.my;if(!my)return;
@@ -912,16 +931,27 @@ function openItems(){
   h+=my.items.length?my.items.map((it,i)=>{const I=E.ITEMS[it];
     const ok=canUse&&it!=="wire"&&(it==="rope"?my.status==="captured":my.status==="active")&&!(it==="shoes"&&(my.tp.roll!=null||my.tp.stay));
     return `<div class="card"><b>${esc(I.name)}</b><div class="sub">${esc(I.text)}</div>${it==="wire"?`<div class="sub">窓のマスを移動先に選ぶと「ワイヤー銃で脱出」を選べます。</div>`:`<div class="row" style="margin-top:6px"><button class="primary" data-useitem="${it}" ${ok?"":"disabled"}>使う</button></div>`}</div>`}).join(""):`<div class="sub">アイテムはありません。</div>`;
-  h+=`<div class="sub">アイテムは怪盗のターン中、行動を確定する前に使えます（縄抜けは捕縛中に使います）。1回使うとなくなります。</div>`;
-  h+=`<details><summary class="sub">アイテム一覧（仮）</summary>${Object.values(E.ITEMS).map(I=>`<div class="sub">・<b>${esc(I.name)}</b>：${esc(I.text)}</div>`).join("")}</details>`;
+  h+=`<div class="sub">アイテムは怪盗のターン中、行動を確定する前に使えます（縄抜けは捕縛中に使います）。1回使うとなくなります。お金で買えるアイテムは、自分のパネルの「🛒 アイテムを買う」から。</div>`;
+  h+=`<details><summary class="sub">アイテム一覧（仮）</summary><div class="sub"><b>ラウンドの始めに配られる</b></div>${Object.values(E.ITEMS).filter(I=>!I.shop).map(I=>`<div class="sub">・<b>${esc(I.name)}</b>：${esc(I.text)}</div>`).join("")}<div class="sub" style="margin-top:4px"><b>お金で買える</b></div>${Object.values(E.ITEMS).filter(I=>I.shop).map(I=>`<div class="sub">・<b>${esc(I.name)}</b>（${I.shop}万円）：${esc(I.text)}</div>`).join("")}</details>`;
   const d=dlg(h);
   d.querySelectorAll("[data-useitem]").forEach(b=>b.onclick=()=>{const it=b.dataset.useitem;d.close();
+    if(E.ITEMS[it].part){const d3=dlg(`<h2 style="margin-top:0">予備の変装パーツ</h2><div class="sub">手に入れるパーツを選んでください。</div><div class="acts" style="margin-top:8px">${E.PART_KEYS.map(x=>`<button class="primary" data-spare="${x}">${esc(E.PARTS[x])}${(my.tp&&V().thieves.find(t=>t.id===V().me).parts[x]||0)>0?"<small>持っている</small>":""}</button>`).join("")}</div>`);
+      d3.querySelectorAll("[data-spare]").forEach(x=>x.onclick=()=>{d3.close();doAct({kind:"useItem",item:"spare",part:x.dataset.spare})});return}
     if(E.ITEMS[it].target){S.ui.itemTarget=it;render();toast(it==="decoy"?"警報を鳴らしたように見せる財宝のマスを選んでください":"マップでマスを選んでください");return}
     if(it==="bond"){const vv=V();const me=vv.thieves.find(t=>t.id===vv.me);const dest=vv.my&&vv.my.tp?vv.my.tp.dest:null;
       const cs=dest==null?[]:vv.thieves.filter(t=>t.id!==vv.me&&t.status==="captured"&&t.k===dest);
       if(cs.length>1){const d2=dlg(`<h2 style="margin-top:0">仲間の絆</h2><div class="sub">解放する仲間を1人選んでください。</div><div class="row" style="margin-top:8px">${cs.map(t=>`<button class="primary" data-bond="${t.id}">${esc(pname(t.id))}</button>`).join("")}</div>`);
         d2.querySelectorAll("[data-bond]").forEach(x=>x.onclick=()=>{d2.close();doAct({kind:"useItem",item:"bond",pid:x.dataset.bond})});return}}
     doAct({kind:"useItem",item:it})});
+}
+function openShop(){
+  const v=V();const my=v.my;const me=pl(v.me);if(!my)return;
+  const can=v.phase==="play"&&v.stage==="thief"&&my.status==="active"&&my.tp&&!my.tp.done&&my.tp.roll==null&&!my.tp.stay&&!my.tp.bought;
+  let h=`<h2 style="margin-top:0">🛒 アイテムを買う</h2><div class="sub">自分のターンの最初（サイコロを振る前）に、1ターンに1つまで買えます。代金はすぐ所持金から払います（今の所持金 ${yen(me.money)}）。同じアイテムを2つは持てません。</div>`;
+  h+=E.SHOP.map(it=>{const I=E.ITEMS[it];const have=my.items.includes(it);const ok=can&&!have&&me.money>=I.shop;
+    return `<div class="card"><div class="row"><b class="grow">${esc(I.name)}</b><span class="pill">${yen(I.shop)}</span></div><div class="sub">${esc(I.text)}</div><div class="row" style="margin-top:6px"><button class="primary" data-buy="${it}" ${ok?"":"disabled"}>${have?"持っています":me.money<I.shop?"お金が足りません":"買う"}</button></div></div>`}).join("");
+  const d=dlg(h);
+  d.querySelectorAll("[data-buy]").forEach(b=>b.onclick=()=>{const it=b.dataset.buy;if(!confirm(`「${E.ITEMS[it].name}」を${E.ITEMS[it].shop}万円で買いますか？`))return;d.close();doAct({kind:"buy",item:it})});
 }
 function openSkills(){
   const v=V();const d0=v.det;
@@ -939,7 +969,7 @@ function openSkills(){
       }
       return `<div class="card"><b>${esc(s.name)}</b> <span class="pill">${s.ct?`使ったあと${s.ct}ターン休み`:"1財宝1回"}</span>${cd>0?` <span class="pill">あと${cd}ターン</span>`:""}<div class="sub">${esc(s.text)}</div>${ctl}</div>`}).join("");
   }else h+=`<div class="sub">まだスキルを選んでいません。</div>`;
-  if(d0&&d0.info&&d0.info.length)h+=`<b>調査メモ</b><div class="log">${d0.info.slice().reverse().map(i=>`<div><span class="sub">R${i.r}-${i.t}T</span> ${esc(i.m)}</div>`).join("")}</div>`;
+  if(d0&&d0.info&&d0.info.length)h+=`<b>調査メモ</b><div class="log">${d0.info.slice().reverse().map(i=>`<div><span class="sub">R${i.r}-${i.t}T</span> ${areaTxt(i.m)}</div>`).join("")}</div>`;
   h+=`<details><summary class="sub">スキル一覧（仮）</summary>${Object.values(E.SKILLS).map(s=>`<div class="sub">・<b>${esc(s.name)}</b>（${s.ct?`${s.ct}ターン休み`:"1財宝1回"}）：${esc(s.text)}</div>`).join("")}</details>`;
   const dd=dlg(h);
   dd.querySelectorAll("[data-sk]").forEach(b=>b.onclick=()=>{dd.close();doAct({kind:"skill",id:b.dataset.sk,area:b.dataset.area,stair:b.dataset.stair,pid:b.dataset.pid})});
@@ -948,7 +978,7 @@ function openLog(){
   const v=V();
   const canAll=isHost()||v.phase==="end";
   let h=`<h2 style="margin-top:0">📋 記録・ログ</h2>`;
-  h+=`<b>ログ（あなたに見える出来事）</b><div class="log" style="max-height:320px">${v.log.slice().reverse().map(l=>`<div><span class="sub">R${l.r}-${l.t}T</span> ${esc(l.m)}</div>`).join("")}</div>`;
+  h+=`<b>ログ（あなたに見える出来事）</b><div class="log" style="max-height:320px">${v.log.slice().reverse().map(l=>`<div><span class="sub">R${l.r}-${l.t}T</span> ${areaTxt(l.m)}</div>`).join("")}</div>`;
   const recs=v.records.filter(r=>r.gid===v.gid);
   if(recs.length)h+=`<b>ラウンドごとの記録</b>${recTable(recs)}`;
   h+=`<h2>ファイルで保存</h2>`;
@@ -987,14 +1017,14 @@ function bind(){
   document.querySelectorAll("[data-proxy]").forEach(b=>b.onclick=()=>{const id=b.dataset.proxy;if(!confirm(`${pname(id)}の代わりに進めますか？`))return;const err=hostApply(id,null,()=>E.proxyAct(S.game,id),`${pname(id)}の代わりに進める`);if(err)toast(err);broadcast()});
   if(v.phase==="lobby"&&isHost()){
     const save=()=>{const o=S.game.opt;o.thiefTimer=$("#o_tt").checked;o.thiefSec=Math.min(300,Math.max(10,+$("#o_ts").value||30));o.detTimer=$("#o_dt").checked;o.detSec=Math.min(300,Math.max(10,+$("#o_ds").value||90));
-      o.items=$("#o_it").checked;o.skills=$("#o_sk").checked;o.capture=$("#o_cap").value;o.partsNeed=+$("#o_pn").value;o.turns=12;o.relTurns=+$("#o_rel").value||1;o.breakout=+$("#o_bk").value;o.rounds=+$("#o_rounds").value||null;o.itemN=+$("#o_in").value||null;o.trN=+$("#o_tn").value||null;broadcast()};
-    ["o_tt","o_ts","o_dt","o_ds","o_it","o_sk","o_cap","o_pn","o_rel","o_bk","o_rounds","o_in","o_tn"].forEach(id=>{const e=document.getElementById(id);if(e)e.onchange=save});
+      o.items=$("#o_it").checked;o.skills=$("#o_sk").checked;o.capture=$("#o_cap").value;o.partsNeed=+$("#o_pn").value;o.turns=12;o.relTurns=+$("#o_rel").value||1;o.breakout=+$("#o_bk").value;o.rounds=+$("#o_rounds").value||null;o.itemN=+$("#o_in").value||null;o.trN=+$("#o_tn").value||null;o.skillMode=$("#o_skm").value;o.detOrder=$("#o_do").value;o.shop=$("#o_shop").checked;o.release=$("#o_relm").checked;broadcast()};
+    ["o_tt","o_ts","o_dt","o_ds","o_it","o_sk","o_cap","o_pn","o_rel","o_bk","o_rounds","o_in","o_tn","o_skm","o_do","o_shop","o_relm"].forEach(id=>{const e=document.getElementById(id);if(e)e.onchange=save});
     on("bstart",()=>{const err=hostApply(S.seat,{kind:"start"});if(err)toast(err);broadcast()});
   }
   on("bnext",()=>{const err=hostApply(S.seat,{kind:"nextRound"});if(err)toast(err);S.ui={};broadcast()});
   // 準備
   document.querySelectorAll("[data-skpick]").forEach(b=>b.onclick=()=>{const s=S.ui.skills=S.ui.skills||[];const id=b.dataset.skpick;const i=s.indexOf(id);if(i>=0)s.splice(i,1);else if(s.length<4)s.push(id);else toast("4つまでです");render()});
-  on("bsetrand",()=>{const ks=Object.keys(E.SKILLS).sort(()=>Math.random()-.5);S.ui.skills=ks.slice(0,4);const ok=detStartSquares(V());S.ui.start=ok[Math.floor(Math.random()*ok.length)];render()});
+  on("bsetrand",()=>{const ks=(V().det.offer||Object.keys(E.SKILLS)).slice().sort(()=>Math.random()-.5);S.ui.skills=ks.slice(0,4);const ok=detStartSquares(V());S.ui.start=ok[Math.floor(Math.random()*ok.length)];render()});
   on("bsetdet",()=>{doAct({kind:"setupDet",k:S.ui.start,skills:S.ui.skills||[]});S.ui={}});
   on("bdecY",()=>{doAct({kind:"declare",yes:true,start:S.ui.tstart});S.ui.tstart=null});on("bdecN",()=>{doAct({kind:"declare",yes:false,start:S.ui.tstart});S.ui.tstart=null});
   document.querySelectorAll("[data-tstart]").forEach(b=>b.onclick=()=>{S.ui.tstart=+b.dataset.tstart;render()});
@@ -1002,6 +1032,8 @@ function bind(){
   on("broll",()=>doAct({kind:"roll"}));on("bstay",()=>doAct({kind:"stay"}));
   on("bheli",()=>{if(confirm("ヘリを呼びますか？（1ラウンド1回・次のターンの探偵のターンの始めに、探偵に知らされます）"))doAct({kind:"heli"})});
   on("bbreak",()=>doAct({kind:"breakout"}));
+  on("brelease",()=>{if(confirm(`${E.MONEY.release}万円を払って保釈されますか？（1ラウンド1回・お金は探偵に入ります）`))doAct({kind:"release"})});
+  on("bshop",openShop);
   on("bredest",()=>{S.ui.redest=true;toast("光っているマスから選び直してください")});
   document.querySelectorAll("[data-act]").forEach(b=>b.onclick=()=>{S.ui.act=b.dataset.act;render()});
   const cp=document.getElementById("cpick");if(cp)cp.onchange=()=>{S.ui.pick=cp.checked};
@@ -1018,7 +1050,7 @@ function bind(){
   // マップ
   document.querySelectorAll(".cell").forEach(el=>el.onclick=()=>cellTap(+el.dataset.k));
 }
-function detStartSquares(v){const b=E.bld({building:v.bid});const fx=[b.front,b.back,...b.stairs.flat(),...b.roof,...b.windows];
+function detStartSquares(v){const b=E.bld({building:v.bid});const fx=[...b.fronts,b.back,...b.stairs.flat(),...b.roof,...b.windows];
   return Array.from({length:64},(_,i)=>64+i).filter(k=>!fx.includes(k)&&!v.tr.some(t=>t.k===k)&&!v.parts.some(x=>x.k===k))}
 function cellTap(k){
   const v=V();
@@ -1038,7 +1070,7 @@ function cellTap(k){
 }
 function cellInfo(k){
   const v=V();const b=E.bld({building:v.bid});const t=[];
-  if(k===b.front)t.push("正面ゲート");if(k===b.back)t.push("裏口"+(v.backOpen?"（開いている）":""));if(b.roof.includes(k))t.push("屋上階段");if(b.windows.includes(k))t.push("窓");
+  if(b.fronts.includes(k))t.push("正面ゲート");if(k===b.back)t.push("裏口"+(v.backOpen?"（開いている）":""));if(b.roof.includes(k))t.push("屋上階段");if(b.windows.includes(k))t.push("窓");
   b.stairs.forEach(p=>{if(p.includes(k))t.push(`階段（${E.nm(p[0])}⇔${E.nm(p[1])}）`)});
   const tr=v.tr.find(x=>x.k===k&&!x.taken);if(tr)t.push(`財宝「${tr.name}」（${E.TR[tr.rank].label}・${tr.value}万円）${tr.alarm?"🚨警報":""}${v.role==="det"?(tr.seen?`／${tr.seen.t}ターン目に調査：${tr.seen.taken?"盗まれていた":`まだあった（${tr.seen.stage}/${tr.seen.need}段階・失敗${tr.seen.fails}回）`}`:"／未調査"):""}`);
   const pt=v.parts.find(x=>x.k===k&&!x.taken);if(pt)t.push(`変装パーツ「${E.PARTS[pt.type]}」${v.role==="det"?(pt.seen?`／${pt.seen.t}ターン目に調査：${pt.seen.taken?"なくなっていた":"まだあった"}`:"／未調査"):""}`);

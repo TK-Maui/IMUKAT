@@ -30,20 +30,21 @@ for (let gi = 0; gi < N; gi++) {
     if (!pend.length) { stats.stuck++; console.log("STUCK", g.phase, g.stage, g.turn); break; }
     const pid = pend[0]; const p = E.P(g, pid);
     if (g.phase === "setup") {
-      if (p.det && !p.det.ready) act(g, pid, { kind: "setupDet", k: pick(Array.from({length:64},(_,i)=>64+i).filter(k=>E.detStartOK(g,k))), skills: Object.keys(E.SKILLS).sort(() => rand() - .5).slice(0, 4) });
+      if (p.det && !p.det.ready) act(g, pid, { kind: "setupDet", k: pick(Array.from({length:64},(_,i)=>64+i).filter(k=>E.detStartOK(g,k))), skills: p.det.offer.slice().sort(() => rand() - .5).slice(0, 4) });
       else act(g, pid, { kind: "declare", yes: rand() < 0.4, start: pick(E.bld(g).starts) });
       continue;
     }
     if (p.th) {
       const th = p.th, tp = th.tp, b = E.bld(g);
-      if (th.status === "captured") { if (g.opt.breakout > 0 && !tp.tried && rand() < 0.8) { act(g, pid, { kind: "breakout" }); continue; } if (th.items.includes("rope") && rand() < 0.7) act(g, pid, { kind: "useItem", item: "rope" }); else act(g, pid, { kind: "confirm" }); continue; }
-      if (rand() < 0.1 && th.items.length) { const it = pick(th.items); act(g, pid, { kind: "useItem", item: it, k: Math.floor(rand() * 128) }); }
+      if (th.status === "captured") { if (!th.released && rand() < 0.15) { act(g, pid, { kind: "release" }); continue; } if (g.opt.breakout > 0 && !tp.tried && rand() < 0.8) { act(g, pid, { kind: "breakout" }); continue; } if (th.items.includes("rope") && rand() < 0.7) act(g, pid, { kind: "useItem", item: "rope" }); else act(g, pid, { kind: "confirm" }); continue; }
+      if (tp.roll == null && !tp.stay && rand() < 0.2) { const it = pick(E.SHOP); act(g, pid, { kind: "buy", item: it }); }
+      if (rand() < 0.1 && th.items.length) { const it = pick(th.items); act(g, pid, { kind: "useItem", item: it, k: Math.floor(rand() * 128), part: pick(E.PART_KEYS) }); }
       if (th.heliCall == null && (th.loot.length || g.turn > 7) && rand() < 0.5) act(g, pid, { kind: "heli" });
       if (rand() < 0.05) { if (rand() < 0.2) { E.proxyAct(g, pid); continue; } }
       act(g, pid, rand() < 0.1 ? { kind: "stay" } : { kind: "roll" });
       const goals = [];
       if (th.heliCall != null && g.turn >= th.heliCall + 1) goals.push(...b.roof);
-      if (E.partsDone(g, th)) goals.push(b.front);
+      if (E.partsDone(g, th)) goals.push(...b.fronts);
       if (!th.loot.length || rand() < 0.4) g.tr.filter(t => !t.taken).forEach(t => goals.push(t.k));
       g.parts.filter(x => !x.taken && !(th.parts[x.type] > 0)).forEach(x => goals.push(x.k));
       g.players.filter(q => q.th && q.th.status === "captured").forEach(q => goals.push(q.th.k));
