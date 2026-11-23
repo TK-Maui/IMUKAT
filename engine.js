@@ -5,7 +5,7 @@
 (function (root) {
 "use strict";
 const E = {};
-E.VERSION = "テスト版 v1.22";
+E.VERSION = "テスト版 v1.23";
 
 /* ---------- 乱数（ゲームごとの種から作る。同じ種＋同じ操作なら同じ結果） ---------- */
 let RNG = null;
@@ -159,7 +159,7 @@ function reach(g, from, n) {
   while (q.length) { const k = q.shift(), dk = d.get(k); if (dk >= n) continue; for (const nb of neighbors(g, k)) if (!d.has(nb)) { d.set(nb, dk + 1); q.push(nb); } }
   return [...d.keys()];
 }
-E.reach = reach;
+E.reach = reach; E.neighbors = neighbors;
 
 /* ---------- ゲーム開始・ラウンド準備 ---------- */
 function startGame(g) {
@@ -1001,7 +1001,7 @@ function viewFor(g, pid) {
   const v = {
     v: g.v, gid: g.gid, phase: g.phase, round: g.round, rounds: g.rounds, turn: g.turn, stage: g.stage, step: g.step, opt: g.opt, undos: g.undos,
     building: bld(g).name, bid: g.building || "museum", detId: g.detId, me: pid, role, roundEndWhy: g.roundEndWhy,
-    players: g.players.map(p => ({ id: p.id, name: p.name, color: p.color, money: p.money, debt: p.debt, connected: p.connected, role: p.det ? "det" : p.th ? "thief" : null,
+    players: g.players.map(p => ({ id: p.id, name: p.name, color: p.color, cpu: p.cpu || null, money: p.money, debt: p.debt, connected: p.connected, role: p.det ? "det" : p.th ? "thief" : null,
       status: p.th ? p.th.status : null, seized: p.th ? !!p.th.seized : false, heliCall: p.th && !(role === "det" && !reveal && !heliKnown(g, p.th)) ? p.th.heliCall : null, declared: p.th ? p.th.declared : null, totalDet: p.total ? p.total.det : 0,
       notice: p.th && (p.th.declared || reveal || p.id === pid) ? p.th.notice : null, noticeOK: p.th && reveal ? !!p.th.noticeOK : null,
       capK: p.th && p.th.status === "captured" ? p.th.k : null, rel: p.th && p.th.status === "captured" ? p.th.rel : null, relNeed: p.th ? p.th.relNeed : null,

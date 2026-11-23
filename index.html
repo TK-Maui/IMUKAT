@@ -154,6 +154,7 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 <div class="side" id="side"></div>
 <dialog id="dlg"></dialog>
 <script src="engine.js"></script>
+<script src="cpu.js"></script>
 <script src="rules.js"></script>
 <script>
 "use strict";
@@ -335,7 +336,23 @@ function broadcast(){
   if(S.mode==="local")store.set("imukat_local",S.game);
   saveHistory();
   try{S.view=E.viewFor(S.game,S.seat);S.timer=S.timerOut;render()}catch(e){console.error(e);toast("画面の表示でエラー："+e.message)}
+  cpuPump();
 }
+/* ---------- CPU（部屋を作った人・1台モードの画面で動かす） ---------- */
+const CPU=window.IMUKAT_CPU;
+function freeId(g,pre){let i=1;while(g.players.some(p=>p.id===pre+i))i++;return pre+i}
+function cpuDelay(g){if(!FX_DICE)return 20;return g.phase==="setup"?350:g.stage==="det"?650:300}
+function cpuPump(){
+  if(!CPU||!S.game||(S.mode!=="host"&&S.mode!=="local")||S.cpuTimer)return;
+  const g=S.game;if(g.phase!=="setup"&&g.phase!=="play")return;
+  if(!E.pendingIds(g).some(id=>{const p=E.P(g,id);return p&&p.cpu}))return;
+  S.cpuTimer=setTimeout(()=>{S.cpuTimer=null;const g2=S.game;if(!g2)return;
+    const id=CPU.step(E,g2,(pid,a,fn)=>hostApply(pid,a,fn,a?actLabel(pid,a):`${pname(pid)}の代わりに進める`));
+    if(id)broadcast()},cpuDelay(g));
+}
+function addCpu(lv){const g=S.game;if(g.players.length>=6){toast("最大6人です");return}
+  const n=g.players.filter(p=>p.cpu).length+1;const p=E.newPlayer(freeId(g,"C"),`CPU${n}（${CPU.LEVELS[lv]}）`);p.cpu=lv;p.token="cpu";g.players.push(p);broadcast()}
+function removeCpu(id){const g=S.game;const i=g.players.findIndex(p=>p.id===id&&p.cpu);if(i>=0)g.players.splice(i,1);broadcast()}
 async function hostCreate(name,resumeCode){
   S.mode="host";S.code=resumeCode||makeCode();S.hist=[];
   if(resumeCode){S.game=JSON.parse(localStorage.getItem("imukat_host_"+resumeCode));S.game.players.forEach(p=>{if(p.id!=="P1")p.connected=false})}
@@ -372,7 +389,7 @@ function hostOnData(conn,msg){
     if(!p){
       if(g.phase!=="lobby"){conn.send({t:"err",msg:"ゲームはもう始まっています（前に参加した端末からなら、同じ名前で再参加できます）"});return}
       if(g.players.length>=6){conn.send({t:"err",msg:"満員です（最大6人）"});return}
-      p=E.newPlayer("P"+(g.players.length+1),String(msg.name||"プレイヤー").slice(0,12));p.token=msg.token;g.players.push(p);
+      p=E.newPlayer(freeId(g,"P"),String(msg.name||"プレイヤー").slice(0,12));p.token=msg.token;g.players.push(p);
       toast(`${p.name}さんが参加しました`);
     }else toast(`${p.name}さんが再接続しました`);
     p.connected=true;S.conns.set(p.id,conn);
@@ -544,8 +561,8 @@ function renderTitle(){
   </div>
   <div class="panel">
     <h2 style="margin-top:0">1人でテストする（1台モード）</h2>
-    <div class="sub">通信なしで、1つの画面で全員を切り替えながら操作します。ルールの確認や1人でのテストに使えます。</div>
-    <div class="row" style="margin-top:8px"><select id="lnum">${[2,3,4,5,6].map(n=>`<option ${n===4?"selected":""}>${n}</option>`).join("")}</select><span>人</span><button class="primary" id="blocal">始める</button>${hasLocal?`<button id="blocalres">続きから</button>`:""}</div>
+    <div class="sub">通信なしで、1つの画面で全員を切り替えながら操作します。ルールの確認や1人でのテストに使えます。始めたあとの画面で、CPU（かんたん・ふつう）を追加できます（1人＋CPUで遊ぶこともできます）。</div>
+    <div class="row" style="margin-top:8px"><select id="lnum">${[1,2,3,4,5,6].map(n=>`<option ${n===4?"selected":""}>${n}</option>`).join("")}</select><span>人</span><button class="primary" id="blocal">始める</button>${hasLocal?`<button id="blocalres">続きから</button>`:""}</div>
   </div>`;
   $("#bjoin").onclick=()=>{const n=$("#jname").value.trim(),c=$("#jcode").value.trim().toUpperCase();if(!n||c.length!==5){toast("名前と5文字の部屋番号を入れてください");return}guestJoin(c,n)};
   $("#bhost").onclick=()=>{const n=$("#hname").value.trim();if(!n){toast("名前を入れてください");return}hostCreate(n)};
@@ -630,7 +647,7 @@ function render(){
   let h=`<div class="row"><h1 class="grow">IMUKAT <span class="sub">${esc(VERSION)}</span></h1><span class="sub">${S.mode==="local"?"1台モード":"部屋 "+esc(S.code)}</span></div>`;
   if(S.mode==="local"){
     const pend=v.pending||[];
-    h+=`<div class="tabs">${S.game.players.map(p=>`<button class="${p.id===S.seat?"on primary":""}" data-seat="${p.id}">${esc(p.name)}${p.det?"🕵":""}${pend.includes(p.id)?" ●":""}</button>`).join("")}</div><div class="sub">● は操作待ちの人。切り替えると、その人の画面（その人に見える情報だけ）になります。</div>`;
+    h+=`<div class="tabs">${S.game.players.map(p=>`<button class="${p.id===S.seat?"on primary":""}" data-seat="${p.id}">${p.cpu?"🤖":""}${esc(p.name)}${p.det?"🕵":""}${pend.includes(p.id)?" ●":""}</button>`).join("")}</div><div class="sub">● は操作待ちの人。切り替えると、その人の画面（その人に見える情報だけ）になります。</div>`;
   }
   if(S.stale)h+=`<div class="panel warn"><b>部屋を作った人の画面と通信できていません。</b><div class="sub">作った人の画面が閉じている・スリープしている可能性があります。自動で再接続を試しています。</div><div class="row" style="margin-top:6px"><button class="primary" id="brecon">今すぐ再接続</button></div></div>`;
   if(v.phase!=="lobby")h+=headerHTML(v);
@@ -658,7 +675,7 @@ function headerHTML(v){
   ${v.backOpen?`<div class="sub ng" style="margin-top:4px">🚪 裏口が開いています（変装していれば裏口からも脱出できます）</div>`:""}</div>`;
 }
 function hostMenuHTML(v){
-  const pend=(v.pending||[]).filter(id=>id!==S.seat||S.mode==="host");
+  const pend=(v.pending||[]).filter(id=>(id!==S.seat||S.mode==="host")&&!(pl(id)||{}).cpu);
   const errN=v.errorsN||0;
   const last=S.hist[S.hist.length-1];
   return `<details class="panel"${errN?' open style="border-color:var(--warn)"':""}><summary class="sub">${S.mode==="local"?"1台モードのメニュー":"部屋を作った人のメニュー"}${errN?`（内部エラー ${errN}件）`:""}${pend.length?`・待っている人 ${pend.length}人`:""}</summary>
@@ -672,7 +689,8 @@ function renderLobby(v){
   const g=S.game;const o=v.opt;const can=isHost();
   let h=`<div class="panel"><h2 style="margin-top:0">参加者を待っています</h2>`;
   if(S.mode==="host")h+=`<div>部屋番号 <span class="big">${esc(S.code)}</span></div><div class="sub">友達にはこのリンクを送ってください</div><div class="row"><input readonly value="${esc(url)}" class="grow" id="shareurl"><button id="bcopy">コピー</button></div>`;
-  h+=`<ul>${v.players.map(p=>`<li>${chip(p.id)}${p.id===v.me?"（あなた）":""}${p.connected?"":" <span class='pill'>切断中</span>"}</li>`).join("")}</ul>`;
+  h+=`<ul>${v.players.map(p=>`<li>${p.cpu?"🤖 ":""}${chip(p.id)}${p.id===v.me?"（あなた）":""}${!p.cpu&&!p.connected?" <span class='pill'>切断中</span>":""}${p.cpu&&can?` <button data-rmcpu="${p.id}" style="min-height:28px;padding:2px 8px;font-size:12px">外す</button>`:""}</li>`).join("")}</ul>`;
+  if(can&&CPU)h+=`<div class="row" style="margin:4px 0 8px"><select id="cpulv">${Object.entries(CPU.LEVELS).map(([k,t])=>`<option value="${k}" ${S.cpuLv===k?"selected":""}>${t}</option>`).join("")}</select><button id="baddcpu" ${v.players.length>=6?"disabled":""}>🤖 CPUを追加</button></div><div class="sub">CPUは自分に見える情報だけで考えて動きます（ズルはしません）。CPUの怪盗とは作戦の相談はできません。最大6人まで。</div>`;
   h+=`<h2>テストの設定${can?"":"（部屋を作った人が決めます）"}</h2>
   <table>
   <tr><td>怪盗のターンの制限時間</td><td><label><input type="checkbox" id="o_tt" ${o.thiefTimer?"checked":""} ${can?"":"disabled"}> あり</label> <input type="number" id="o_ts" min="10" max="300" step="5" value="${o.thiefSec}" style="width:80px" ${can?"":"disabled"}>秒</td></tr>
@@ -1020,6 +1038,8 @@ function bind(){
       o.items=$("#o_it").checked;o.skills=$("#o_sk").checked;o.capture=$("#o_cap").value;o.partsNeed=+$("#o_pn").value;o.turns=12;o.relTurns=+$("#o_rel").value||1;o.breakout=+$("#o_bk").value;o.rounds=+$("#o_rounds").value||null;o.itemN=+$("#o_in").value||null;o.trN=+$("#o_tn").value||null;o.skillMode=$("#o_skm").value;o.detOrder=$("#o_do").value;o.shop=$("#o_shop").checked;o.release=$("#o_relm").checked;broadcast()};
     ["o_tt","o_ts","o_dt","o_ds","o_it","o_sk","o_cap","o_pn","o_rel","o_bk","o_rounds","o_in","o_tn","o_skm","o_do","o_shop","o_relm"].forEach(id=>{const e=document.getElementById(id);if(e)e.onchange=save});
     on("bstart",()=>{const err=hostApply(S.seat,{kind:"start"});if(err)toast(err);broadcast()});
+    on("baddcpu",()=>{S.cpuLv=$("#cpulv").value;addCpu(S.cpuLv)});
+    document.querySelectorAll("[data-rmcpu]").forEach(b=>b.onclick=()=>removeCpu(b.dataset.rmcpu));
   }
   on("bnext",()=>{const err=hostApply(S.seat,{kind:"nextRound"});if(err)toast(err);S.ui={};broadcast()});
   // 準備
