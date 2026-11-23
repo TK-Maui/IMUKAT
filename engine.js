@@ -5,7 +5,7 @@
 (function (root) {
 "use strict";
 const E = {};
-E.VERSION = "テスト版 v1.23";
+E.VERSION = "テスト版 v1.24";
 
 /* ---------- 乱数（ゲームごとの種から作る。同じ種＋同じ操作なら同じ結果） ---------- */
 let RNG = null;
@@ -37,7 +37,7 @@ E.nm = nm; E.parse = parse; E.areaOf = areaOf; E.FL = FL; E.RW = RW; E.CL = CL; 
 const BUILDINGS = {
   museum: {
     name: "美術館", fronts: ["D-13", "D-14"], back: "A-2", stairs: [["B-9", "F-9"], ["C-8", "G-8"]],
-    roof: ["E-1", "H-16"], windows: ["F-4", "G-13"], starts: ["A-2", "D-13", "F-4", "G-13"],
+    roof: ["E-1", "H-16"], windows: ["F-4", "G-13"], starts: ["A-2", "D-13", "D-14", "F-4", "G-13"],
     tnames: { high: ["夜明けの涙"], mid: ["月下の貴婦人", "時を止めた懐中時計", "眠れる獅子の像"], low: ["銀の燭台", "黄金の羽ペン"] },
   },
 };

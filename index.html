@@ -780,8 +780,8 @@ function renderSetup(v){
     const n=E.NOTICES[v.my.notice];
     if(v.my.declared==null){
       const b0=E.bld({building:v.bid});const ts=S.ui.tstart;
-      h+=`<div class="panel me"><b>🚪 スタート地点</b><div class="sub">裏口（A-2）・正面ゲート（D-13）・2階の窓（F-4・G-13）から1つ選んでください。仲間の選んだ場所は共有マップで見えますが、探偵には分かりません。1ターン目は足跡が残りません。</div>
-      <div class="row" style="margin-top:6px">${b0.starts.map(k=>`<button data-tstart="${k}" class="${ts===k?"on primary":""}">${{[b0.back]:"裏口",[b0.front]:"正面ゲート"}[k]||"窓"} ${E.nm(k)}</button>`).join("")}</div></div>
+      h+=`<div class="panel me"><b>🚪 スタート地点</b><div class="sub">裏口（A-2）・正面ゲート（D-13・D-14）・2階の窓（F-4・G-13）から1つ選んでください。仲間の選んだ場所は共有マップで見えますが、探偵には分かりません。1ターン目は足跡が残りません。</div>
+      <div class="row" style="margin-top:6px">${b0.starts.map(k=>`<button data-tstart="${k}" class="${ts===k?"on primary":""}">${(k===b0.back?"裏口":b0.fronts.includes(k)?"正面ゲート":"窓")} ${E.nm(k)}</button>`).join("")}</div></div>
       <div class="panel me"><b>📜 あなたの予告状</b><div class="card notice"><b>${esc(n.name)}</b><div>${esc(n.text)}</div></div>
       <div class="sub">予告すると全員に公開され、達成して財宝を持って脱出すれば ${yen(E.MONEY.noticeOpen)}。予告しなければ伏せたままで、達成すれば ${yen(E.MONEY.noticeHidden)}。予告した怪盗が達成できなければ、探偵に ${yen(E.MONEY.block)}。<br>全員が決めたら同時に公開されます。</div>
       <div class="row" style="margin-top:8px"><button class="primary" id="bdecY" ${S.ui.tstart!=null?"":"disabled"}>予告する</button><button id="bdecN" ${S.ui.tstart!=null?"":"disabled"}>予告しない</button></div>${S.ui.tstart!=null?"":`<div class="sub">先にスタート地点を選んでください</div>`}</div>`;
