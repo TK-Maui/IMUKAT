@@ -131,7 +131,7 @@
     const left = v.opt.turns - v.turn;
     if (my.canRelease && !tp.tried && pl.money >= E.MONEY.release) {
       const teamFree = v.thieves.some(t => t.id !== v.me && t.status === "active");
-      const want = lv === "normal" ? (me.loot.length > 0 && left >= 2 && (!teamFree || left <= 4)) || (!teamFree && left >= 4) : chance(.3) && left >= 3;
+      const want = lv === "normal" ? (me.loot.length > 0 && left >= 2 && (!teamFree || left <= 4)) || (!teamFree && left >= 4) : me.loot.length > 0 && left >= 3; // かんたん：財宝を持っているときだけ保釈
       if (want) return { kind: "release" };
     }
     if (v.opt.breakout > 0 && !tp.tried) return { kind: "breakout" };
@@ -158,12 +158,15 @@
       const dmMe = distMap(E, g, [me.k]);
       const c = caps.sort((a, c2) => dmMe[a.k] - dmMe[c2.k])[0];
       const lim = lv === "normal" ? (loot ? 4 : 8) : 3;
-      if (dmMe[c.k] <= lim && left >= 2) return { goals: [c.k], stayAtGoal: true, why: "rescue" };
+      if (dmMe[c.k] <= lim && left >= 2 && !(loot && left <= 5)) return { goals: [c.k], stayAtGoal: true, why: "rescue" };
     }
     // 5) 財宝を持っている → 屋上（ヘリ）か、変装パーツ集め
     if (loot) {
       if (hc == null && T + 2 <= v.opt.turns) return { goals: b.roof, why: "toHeli" };
+      // ヘリに乗り損ねた：ワイヤー銃 → 変装パーツ（そろえられそうなら）→ 正面ゲート
+      if (v.my.items.includes("wire")) return { goals: b.windows, why: "wire" };
       const need = v.parts.filter(x => !x.taken && !(me.parts[x.type] > 0)).map(x => x.k);
+      const have = E.PART_KEYS.filter(t => me.parts[t] > 0).length;
       if (need.length) return { goals: need, why: "parts" };
       return { goals: exits, why: "gate" };
     }
@@ -198,6 +201,9 @@
   function wantHeli(E, g, v, lv, me, plan) {
     const b = E.bld(g); const T = v.turn;
     if (T + 2 > v.opt.turns) return false;
+    const left = v.opt.turns - T;
+    if (lv === "normal" && me.loot.length && left <= 5 && T + 2 <= v.opt.turns) { // 終盤で財宝を持っていたら、屋上に間に合う距離ならすぐ呼ぶ
+      const dr = distMap(E, g, E.bld(g).roof)[me.k]; if (dr <= 13) return true; }
     if (!(plan.why === "toHeli" || plan.why === "late" || (lv === "easy" && me.loot.length))) return false;
     const dm = distMap(E, g, b.roof); const d = dm[me.k];
     return lv === "normal" ? d <= 10 : true; // ヘリは2ターン後に来て、もう1ターン待つ
